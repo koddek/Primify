@@ -593,7 +593,7 @@ FodyWeavers.xsd
 # Verify
 *.received.*
 *.received/
-
+Primify.snk
 bin/
 obj/
 /packages/
