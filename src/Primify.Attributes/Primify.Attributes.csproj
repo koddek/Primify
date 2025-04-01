@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>netstandard2.0</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageId>Primify</PackageId>
+        <Version>1.0.0</Version>
+        <Authors>Koddek</Authors>
+        <Description>A library providing attributes for Primify source generation, enabling custom value types with JSON serialization.</Description>
+        <PackageTags>json;source-generator;value-types;dotnet</PackageTags>
+        <RepositoryUrl>https://github.com/koddek/Primify</RepositoryUrl>
+        <PackageLicenseExpression>MIT</PackageLicenseExpression>
+        <PackageProjectUrl>https://github.com/koddek/primify</PackageProjectUrl>
+        <PackageIcon>icon.png</PackageIcon>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <SignAssembly>true</SignAssembly>
+        <AssemblyOriginatorKeyFile>../Primify.snk</AssemblyOriginatorKeyFile>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <None Include="../README.md" Pack="true" PackagePath="/"/>
+        <None Include="../icon.png" Pack="true" PackagePath="/"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="SourceLink.GitHub" Version="8.0.0" PrivateAssets="all"/>
+    </ItemGroup>
+</Project>
