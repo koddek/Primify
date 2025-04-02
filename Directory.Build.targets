@@ -1,0 +1,29 @@
+<Project>
+  <!-- This file will be imported after the project file is evaluated -->
+  
+  <!-- Define build order targets -->
+  <Target Name="BuildDependencies" BeforeTargets="BeforeBuild">
+    <!-- Build Attributes before Generator, but only if necessary -->
+    <MSBuild 
+      Condition="'$(MSBuildProjectName)' == 'Primify.Generator'"
+      Projects="$(MSBuildThisFileDirectory)src\Primify.Attributes\Primify.Attributes.csproj" 
+      Targets="Build" 
+      Properties="Configuration=$(Configuration)" />
+  </Target>
+
+  <!-- Special handling for Generator packaging -->
+  <Target Name="PrepareGeneratorPackage" 
+          AfterTargets="Build" 
+          BeforeTargets="GenerateNuspec"
+          Condition="'$(MSBuildProjectName)' == 'Primify.Generator'">
+    <!-- Ensure the output path exists -->
+    <MakeDir Directories="$(OutputPath)" Condition="!Exists('$(OutputPath)')" />
+    
+    <!-- Copy dependencies to output directory if needed -->
+    <Copy 
+      SourceFiles="$(OutputPath)$(AssemblyName).dll" 
+      DestinationFolder="$(OutputPath)" 
+      SkipUnchangedFiles="true" 
+      Condition="Exists('$(OutputPath)$(AssemblyName).dll')" />
+  </Target>
+</Project>

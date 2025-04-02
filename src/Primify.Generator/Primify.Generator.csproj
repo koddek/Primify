@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <PackageId>Primify.Generator</PackageId>
+        <Version>1.0.0</Version>
+        <Description>A source generator for Primify, creating custom value types with JSON serialization support.</Description>
+        <PackageTags>json;source-generator;value-types;dotnet;litedb-bson</PackageTags>
+
+        <!-- Source generator specific properties -->
+        <IsRoslynComponent>true</IsRoslynComponent>
+        <IncludeBuildOutput>true</IncludeBuildOutput>
+        <DevelopmentDependency>true</DevelopmentDependency>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <NoPackageAnalysis>true</NoPackageAnalysis>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" PrivateAssets="all"/>
+        <!--        Updating packages to the versions below causes the generator to fail-->
+        <!--        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.13.0" PrivateAssets="all" />-->
+        <!--        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" PrivateAssets="all" />-->
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Reference without circular dependency -->
+        <Reference Include="..\Primify.Attributes\bin\$(Configuration)\$(TargetFramework)\Primify.Attributes.dll"/>
+
+        <!-- Include the generator DLL in the package -->
+        <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
+    </ItemGroup>
+</Project>

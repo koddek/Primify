@@ -1,0 +1,17 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+      {
+        "name": ".NET Core Launch (console)", // Friendly name in the debug dropdown
+        "type": "coreclr",                   // Debugger type for .NET Core/5+
+        "request": "launch",
+        "preLaunchTask": "build",            // Runs the 'build' task before launching
+        // IMPORTANT: Change this to the path of your *output DLL*
+        "program": "${workspaceFolder}/bin/Debug/net9.0/Primify.Tests.dll",
+        "args": [],                          // Command-line arguments to pass to your app
+        "cwd": "${workspaceFolder}",         // Working directory
+        "console": "integratedTerminal",     // Where to show console output (integratedTerminal, internalConsole, externalTerminal)
+        "stopAtEntry": false                 // Set to true to break at the program's entry point
+      }
+    ]
+  }
