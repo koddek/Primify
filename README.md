@@ -108,11 +108,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 Inspired by [Vogen](https://github.com/SteveDunn/Vogen) and [Primitively](https://github.com/Primitively/Primitively). These library developers are Epic Level Engineers. Source generation is mind-bending.
 ```
 ```
-
-### Notes
-- The `README.md` is now fully enclosed in markdown quotes (```).
-- It includes all sections as previously defined, with the library name updated to **Primify** and the attribute name updated to **PrimifyAttribute<T>**.
-- The examples use common domain names (`OrderId`, `CustomerName`, `Quantity`) and demonstrate both basic usage and advanced customization.
-- The icon (`icon.png`) is assumed to be in the root directory, as referenced in the `csproj` files for NuGet packaging.
-
-Let me know if you need any further adjustments!
