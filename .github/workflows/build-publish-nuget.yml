@@ -104,20 +104,40 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      # Restore using global NuGet configuration
+      # Restore project dependencies
       - name: Restore dependencies
-        run: dotnet restore ${{ env.SOLUTION_FILE }}
+        run: |
+          dotnet restore ${{ env.SOLUTION_FILE }}
+          
+          # Verify the assets file was created
+          for PROJECT in "${{ env.MAIN_PROJECT_FILE }}" "${{ env.ATTRIBUTES_PROJECT_FILE }}" "${{ env.GENERATOR_PROJECT_FILE }}"; do
+            if [ -f "$PROJECT" ]; then
+              PROJECT_DIR=$(dirname "$PROJECT")
+              ASSETS_FILE="$PROJECT_DIR/obj/project.assets.json"
+          
+              if [ -f "$ASSETS_FILE" ]; then
+                echo "Assets file exists for $(basename "$PROJECT_DIR")"
+              else
+                echo "Warning: Assets file not found for $(basename "$PROJECT_DIR"). Forcing restore..."
+                dotnet restore "$PROJECT" --force
+              fi
+            fi
+          done
 
       - name: Build the solution
-        run: dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-restore /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
+        run: dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
 
       - name: Run tests (if any)
-        run: dotnet test ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-restore --no-build || echo "No tests found or tests failed"
+        run: dotnet test ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-build || echo "No tests found or tests failed"
 
       - name: Pack the NuGet package
         run: |
+          # Ensure project restore happened
+          dotnet restore ${{ env.MAIN_PROJECT_FILE }} --force
+          
           EXPECTED_PACKAGE_NAME="${{ env.PROJECT_NAME }}.${{ steps.extract_version.outputs.version }}.nupkg"
-          dotnet pack ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} --no-restore --no-build /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }} --output ./nuget_packages
+          dotnet pack ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }} --output ./nuget_packages
+          
           if [ ! -f "./nuget_packages/$EXPECTED_PACKAGE_NAME" ]; then
             echo "Error: Expected package file $EXPECTED_PACKAGE_NAME not found after packing."
             ls -l ./nuget_packages
