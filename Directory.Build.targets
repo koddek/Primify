@@ -1,18 +1,17 @@
 <Project>
-  <!-- This file will be imported after the project file is evaluated -->
-
   <!-- Define build order targets -->
   <Target Name="BuildDependencies" BeforeTargets="Build">
+    <!-- Use MSBuildThisFileDirectory with forward slashes for Linux compatibility -->
     <!-- Build order: Attributes first, then Generator, then main package -->
     <MSBuild
             Condition="'$(MSBuildProjectName)' == 'Primify.Generator'"
-            Projects="$(SolutionDir)src\Primify.Attributes\Primify.Attributes.csproj"
+            Projects="$(MSBuildThisFileDirectory)src/Primify.Attributes/Primify.Attributes.csproj"
             Targets="Build"
             Properties="Configuration=$(Configuration)" />
 
     <MSBuild
             Condition="'$(MSBuildProjectName)' == 'Primify'"
-            Projects="$(SolutionDir)src\Primify.Attributes\Primify.Attributes.csproj;$(SolutionDir)src\Primify.Generator\Primify.Generator.csproj"
+            Projects="$(MSBuildThisFileDirectory)src/Primify.Attributes/Primify.Attributes.csproj;$(MSBuildThisFileDirectory)src/Primify.Generator/Primify.Generator.csproj"
             Targets="Build"
             Properties="Configuration=$(Configuration)" />
   </Target>
@@ -23,8 +22,8 @@
 
     <!-- For the main project, verify the referenced outputs exist -->
     <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Primify'">
-      <AttributesDll>$(MSBuildThisFileDirectory)src\Primify.Attributes\bin\$(Configuration)\$(TargetFramework)\Primify.Attributes.dll</AttributesDll>
-      <GeneratorDll>$(MSBuildThisFileDirectory)src\Primify.Generator\bin\$(Configuration)\$(TargetFramework)\Primify.Generator.dll</GeneratorDll>
+      <AttributesDll>$(MSBuildThisFileDirectory)src/Primify.Attributes/bin/$(Configuration)/$(TargetFramework)/Primify.Attributes.dll</AttributesDll>
+      <GeneratorDll>$(MSBuildThisFileDirectory)src/Primify.Generator/bin/$(Configuration)/$(TargetFramework)/Primify.Generator.dll</GeneratorDll>
     </PropertyGroup>
 
     <Warning
@@ -40,5 +39,9 @@
             Condition="'$(MSBuildProjectName)' == 'Primify'"
             Importance="high"
             Text="Main project directory: $(MSBuildProjectDirectory)" />
+
+    <!-- Debug messages to help troubleshoot path issues -->
+    <Message Importance="high" Text="MSBuildThisFileDirectory: $(MSBuildThisFileDirectory)" />
+    <Message Importance="high" Text="Current Working Directory: $(MSBuildProjectDirectory)" />
   </Target>
 </Project>

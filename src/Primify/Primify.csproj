@@ -8,19 +8,19 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" PrivateAssets="All" />
-        <ProjectReference Include="..\Primify.Generator\Primify.Generator.csproj" PrivateAssets="All" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="../Primify.Attributes/Primify.Attributes.csproj" PrivateAssets="All" />
+        <ProjectReference Include="../Primify.Generator/Primify.Generator.csproj" PrivateAssets="All" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
     <PropertyGroup>
-        <!-- Define output paths for easy reference -->
-        <AttributesOutputPath>$(MSBuildThisFileDirectory)..\Primify.Attributes\bin\$(Configuration)\$(TargetFramework)\Primify.Attributes.dll</AttributesOutputPath>
-        <GeneratorOutputPath>$(MSBuildThisFileDirectory)..\Primify.Generator\bin\$(Configuration)\$(TargetFramework)\Primify.Generator.dll</GeneratorOutputPath>
+        <!-- Define output paths for easy reference with forward slashes -->
+        <AttributesOutputPath>$(MSBuildThisFileDirectory)../Primify.Attributes/bin/$(Configuration)/$(TargetFramework)/Primify.Attributes.dll</AttributesOutputPath>
+        <GeneratorOutputPath>$(MSBuildThisFileDirectory)../Primify.Generator/bin/$(Configuration)/$(TargetFramework)/Primify.Generator.dll</GeneratorOutputPath>
     </PropertyGroup>
 
     <ItemGroup>
         <!-- Include the Attributes in the lib folder -->
-        <None Include="$(AttributesOutputPath)" Pack="true" PackagePath="lib\$(TargetFramework)" Visible="false" />
+        <None Include="$(AttributesOutputPath)" Pack="true" PackagePath="lib/$(TargetFramework)" Visible="false" />
 
         <!-- Include the Generator in the analyzers folder -->
         <None Include="$(GeneratorOutputPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
