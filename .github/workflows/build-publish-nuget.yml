@@ -132,12 +132,27 @@ jobs:
           ls -la ${{ github.workspace }}/src/
           ls -la ${{ github.workspace }}/src/Primify/
 
-      # Build again explicitly for the main project to ensure it's properly built
-      - name: Build main project explicitly
+#      # Build again explicitly for the main project to ensure it's properly built
+#      - name: Build main project explicitly
+#        run: |
+#          echo "Explicitly building ${{ env.MAIN_PROJECT_FILE }}"
+#          dotnet build ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
+#          
+#          # Verify the build output exists
+#          MAIN_OUTPUT_DLL="${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.dll"
+#          if [ -f "$MAIN_OUTPUT_DLL" ]; then
+#            echo "✅ Main project build output verified"
+#            ls -la $(dirname "$MAIN_OUTPUT_DLL")
+#          else
+#            echo "❌ ERROR: Main project build output still not found!"
+#            exit 1
+#          fi
+
+      # Build the solution
+      - name: Build the solution
         run: |
-          echo "Explicitly building ${{ env.MAIN_PROJECT_FILE }}"
-          dotnet build ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
-          
+          dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
+
           # Verify the build output exists
           MAIN_OUTPUT_DLL="${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.dll"
           if [ -f "$MAIN_OUTPUT_DLL" ]; then
@@ -147,7 +162,7 @@ jobs:
             echo "❌ ERROR: Main project build output still not found!"
             exit 1
           fi
-
+          
       - name: Check target framework in project file
         run: |
           echo "Checking target framework in project file:"
