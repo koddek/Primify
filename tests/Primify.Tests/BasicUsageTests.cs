@@ -35,7 +35,7 @@ public class BasicUsageTests
         var customerName = CustomerName.From(expectedValue);
 
         // Act
-        string actualValue = (string)customerName; // Implicit conversion to string
+        string actualValue = (string)customerName; // Explicit conversion to string
         CustomerName fromPrimitive = expectedValue; // Implicit conversion from string
 
         // Assert

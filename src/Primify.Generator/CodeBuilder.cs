@@ -80,7 +80,6 @@ internal static class CodeBuilder
 
     public static void AppendImplicitConvertersImplementation(WrapperTypeInfo info, StringBuilder sb, string indent1)
     {
-        // todo: test if i can create an implicit converter to primitive
         // --- Implicit Conversions ---
         sb.AppendLine(
             $"{indent1}/// <summary>Explicitly converts the wrapper to its primitive value.</summary>");
