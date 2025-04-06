@@ -8,16 +8,35 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" />
+        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" PrivateAssets="All" />
+        <ProjectReference Include="..\Primify.Generator\Primify.Generator.csproj" PrivateAssets="All" ReferenceOutputAssembly="false" />
     </ItemGroup>
+
+    <PropertyGroup>
+        <!-- Define output paths for easy reference -->
+        <AttributesOutputPath>$(MSBuildThisFileDirectory)..\Primify.Attributes\bin\$(Configuration)\$(TargetFramework)\Primify.Attributes.dll</AttributesOutputPath>
+        <GeneratorOutputPath>$(MSBuildThisFileDirectory)..\Primify.Generator\bin\$(Configuration)\$(TargetFramework)\Primify.Generator.dll</GeneratorOutputPath>
+    </PropertyGroup>
 
     <ItemGroup>
         <!-- Include the Attributes in the lib folder -->
-        <None Include="..\Primify.Attributes\bin\$(Configuration)\$(TargetFramework)\Primify.Attributes.dll" Pack="true" PackagePath="lib\$(TargetFramework)" Visible="false" />
+        <None Include="$(AttributesOutputPath)" Pack="true" PackagePath="lib\$(TargetFramework)" Visible="false" />
 
         <!-- Include the Generator in the analyzers folder -->
-        <None Include="..\Primify.Generator\bin\$(Configuration)\$(TargetFramework)\Primify.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-
-        <!-- Add other Generator dependencies here if required -->
+        <None Include="$(GeneratorOutputPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     </ItemGroup>
+
+    <!-- Verify the output files exist before packaging -->
+    <Target Name="VerifyFilesExist" BeforeTargets="GenerateNuspec">
+        <Message Text="Attributes DLL path: $(AttributesOutputPath)" Importance="high" />
+        <Message Text="Generator DLL path: $(GeneratorOutputPath)" Importance="high" />
+
+        <Error
+                Condition="!Exists('$(AttributesOutputPath)')"
+                Text="Attributes DLL not found at: $(AttributesOutputPath)" />
+
+        <Error
+                Condition="!Exists('$(GeneratorOutputPath)')"
+                Text="Generator DLL not found at: $(GeneratorOutputPath)" />
+    </Target>
 </Project>

@@ -2,18 +2,43 @@
   <!-- This file will be imported after the project file is evaluated -->
 
   <!-- Define build order targets -->
-  <Target Name="BuildDependencies" BeforeTargets="BeforeBuild">
+  <Target Name="BuildDependencies" BeforeTargets="Build">
     <!-- Build order: Attributes first, then Generator, then main package -->
     <MSBuild
             Condition="'$(MSBuildProjectName)' == 'Primify.Generator'"
-            Projects="$(MSBuildThisFileDirectory)src\Primify.Attributes\Primify.Attributes.csproj"
+            Projects="$(SolutionDir)src\Primify.Attributes\Primify.Attributes.csproj"
             Targets="Build"
             Properties="Configuration=$(Configuration)" />
 
     <MSBuild
             Condition="'$(MSBuildProjectName)' == 'Primify'"
-            Projects="$(MSBuildThisFileDirectory)src\Primify.Attributes\Primify.Attributes.csproj;$(MSBuildThisFileDirectory)src\Primify.Generator\Primify.Generator.csproj"
+            Projects="$(SolutionDir)src\Primify.Attributes\Primify.Attributes.csproj;$(SolutionDir)src\Primify.Generator\Primify.Generator.csproj"
             Targets="Build"
             Properties="Configuration=$(Configuration)" />
+  </Target>
+
+  <!-- Ensure the output exists before packaging -->
+  <Target Name="VerifyOutputsForPack" BeforeTargets="GenerateNuspec">
+    <Message Importance="high" Text="Verifying output files before packing..." />
+
+    <!-- For the main project, verify the referenced outputs exist -->
+    <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Primify'">
+      <AttributesDll>$(MSBuildThisFileDirectory)src\Primify.Attributes\bin\$(Configuration)\$(TargetFramework)\Primify.Attributes.dll</AttributesDll>
+      <GeneratorDll>$(MSBuildThisFileDirectory)src\Primify.Generator\bin\$(Configuration)\$(TargetFramework)\Primify.Generator.dll</GeneratorDll>
+    </PropertyGroup>
+
+    <Warning
+            Condition="'$(MSBuildProjectName)' == 'Primify' And !Exists('$(AttributesDll)')"
+            Text="Attributes DLL not found at $(AttributesDll)" />
+
+    <Warning
+            Condition="'$(MSBuildProjectName)' == 'Primify' And !Exists('$(GeneratorDll)')"
+            Text="Generator DLL not found at $(GeneratorDll)" />
+
+    <!-- List the directory contents for debugging -->
+    <Message
+            Condition="'$(MSBuildProjectName)' == 'Primify'"
+            Importance="high"
+            Text="Main project directory: $(MSBuildProjectDirectory)" />
   </Target>
 </Project>

@@ -7,6 +7,9 @@ on:
       - main
     paths:
       - 'src/Primify/**'
+      - 'src/Primify.Attributes/**'
+      - 'src/Primify.Generator/**'
+      - 'Directory.Build.*'
       - 'Primify.sln'
       - 'README.md'
       - 'LICENSE'
@@ -14,6 +17,9 @@ on:
   pull_request:
     paths:
       - 'src/Primify/**'
+      - 'src/Primify.Attributes/**'
+      - 'src/Primify.Generator/**'
+      - 'Directory.Build.*'
       - 'Primify.sln'
       - 'README.md'
       - 'LICENSE'
@@ -104,84 +110,52 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      # Restore project dependencies
-      - name: Restore dependencies
+      # Build the projects in order explicitly
+      - name: Build projects in sequence
         run: |
-          dotnet restore ${{ env.SOLUTION_FILE }}
+          echo "Building Attributes project..."
+          dotnet build ${{ env.ATTRIBUTES_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }}
           
-          # Verify the assets file was created
-          for PROJECT in "${{ env.MAIN_PROJECT_FILE }}" "${{ env.ATTRIBUTES_PROJECT_FILE }}" "${{ env.GENERATOR_PROJECT_FILE }}"; do
-            if [ -f "$PROJECT" ]; then
-              PROJECT_DIR=$(dirname "$PROJECT")
-              ASSETS_FILE="$PROJECT_DIR/obj/project.assets.json"
+          echo "Building Generator project..."
+          dotnet build ${{ env.GENERATOR_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }}
           
-              if [ -f "$ASSETS_FILE" ]; then
-                echo "Assets file exists for $(basename "$PROJECT_DIR")"
-              else
-                echo "Warning: Assets file not found for $(basename "$PROJECT_DIR"). Forcing restore..."
-                dotnet restore "$PROJECT" --force
-              fi
-            fi
-          done
-
-      - name: Examine project file
-        run: cat ${{ env.MAIN_PROJECT_FILE }}
-
-      - name: Verify project structure
-        run: |
-          ls -la ${{ github.workspace }}/src/
-          ls -la ${{ github.workspace }}/src/Primify/
-
-#      # Build again explicitly for the main project to ensure it's properly built
-#      - name: Build main project explicitly
-#        run: |
-#          echo "Explicitly building ${{ env.MAIN_PROJECT_FILE }}"
-#          dotnet build ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
-#          
-#          # Verify the build output exists
-#          MAIN_OUTPUT_DLL="${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.dll"
-#          if [ -f "$MAIN_OUTPUT_DLL" ]; then
-#            echo "✅ Main project build output verified"
-#            ls -la $(dirname "$MAIN_OUTPUT_DLL")
-#          else
-#            echo "❌ ERROR: Main project build output still not found!"
-#            exit 1
-#          fi
-
-      # Build the solution
-      - name: Build the solution
-        run: |
-          dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
-
-          # Verify the build output exists
-          MAIN_OUTPUT_DLL="${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.dll"
-          if [ -f "$MAIN_OUTPUT_DLL" ]; then
-            echo "✅ Main project build output verified"
-            ls -la $(dirname "$MAIN_OUTPUT_DLL")
-          else
-            echo "❌ ERROR: Main project build output still not found!"
+          echo "Building Main project..."
+          dotnet build ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }}
+          
+          # Verify outputs exist
+          ATTRIBUTES_DLL="${{ github.workspace }}/src/Primify.Attributes/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.Attributes.dll"
+          GENERATOR_DLL="${{ github.workspace }}/src/Primify.Generator/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.Generator.dll"
+          MAIN_DLL="${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.dll"
+          
+          if [ ! -f "$ATTRIBUTES_DLL" ]; then
+            echo "❌ ERROR: Attributes DLL not found at $ATTRIBUTES_DLL"
             exit 1
+          else
+            echo "✅ Attributes DLL found"
           fi
           
-      - name: Check target framework in project file
-        run: |
-          echo "Checking target framework in project file:"
-          grep -A 5 TargetFramework ${{ env.MAIN_PROJECT_FILE }} || echo "TargetFramework not found"
-          # Check the actual output directories
-          echo "Checking actual build output directories:"
-          find ${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }} -type d -maxdepth 1
+          if [ ! -f "$GENERATOR_DLL" ]; then
+            echo "❌ ERROR: Generator DLL not found at $GENERATOR_DLL"
+            exit 1
+          else
+            echo "✅ Generator DLL found"
+          fi
+          
+          if [ ! -f "$MAIN_DLL" ]; then
+            echo "❌ ERROR: Main project DLL not found at $MAIN_DLL"
+            exit 1
+          else
+            echo "✅ Main project DLL found"
+          fi
 
       - name: Pack the NuGet package
         run: |
-          # Ensure project restore happened
-          dotnet restore ${{ env.MAIN_PROJECT_FILE }} --force
-          
           EXPECTED_PACKAGE_NAME="${{ env.PROJECT_NAME }}.${{ steps.extract_version.outputs.version }}.nupkg"
           echo "Creating output directory for packages"
           mkdir -p ./nuget_packages
           
           echo "Packing project with explicit output path"
-          dotnet pack ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }} --output ./nuget_packages --no-build
+          dotnet pack ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} --output ./nuget_packages --no-build
           
           if [ ! -f "./nuget_packages/$EXPECTED_PACKAGE_NAME" ]; then
             echo "Error: Expected package file $EXPECTED_PACKAGE_NAME not found after packing."
