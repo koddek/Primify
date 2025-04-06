@@ -136,25 +136,30 @@ namespace Primify.Generator
                 return;
             }
 
-            // Find our attribute type
             var attributeSymbol = compilation.GetTypeByMetadataName(AttributeFullName);
             if (attributeSymbol == null)
             {
-                // Report diagnostic when attribute is not found
-                context.ReportDiagnostic(Diagnostic.Create(ErrorAttributeNotFound,
-                    Location.None, AttributeFullName));
+                context.ReportDiagnostic(Diagnostic.Create(ErrorAttributeNotFound, Location.None, AttributeFullName));
                 return;
             }
 
-            var typesToProcess = new List<TypeInfo>();
+            var typesToProcess = new List<WrapperTypeInfo>();
 
-            // --- Phase 1: Collect and Validate Types ---
+            Phase1CollectAndValidateTypes(compilation, types, context, attributeSymbol, typesToProcess);
+
+            Phase2GenerateCode(context, typesToProcess);
+        }
+
+        private static void Phase1CollectAndValidateTypes(Compilation compilation,
+            ImmutableArray<TypeDeclarationSyntax> types,
+            SourceProductionContext context, INamedTypeSymbol attributeSymbol, List<WrapperTypeInfo> typesToProcess
+        )
+        {
             foreach (var typeDeclSyntax in types)
             {
                 var semanticModel = compilation.GetSemanticModel(typeDeclSyntax.SyntaxTree);
-                if (semanticModel.GetDeclaredSymbol(typeDeclSyntax) is not { } typeSymbol) continue;
+                if (semanticModel.GetDeclaredSymbol(typeDeclSyntax) is not INamedTypeSymbol typeSymbol) continue;
 
-                // Improve attribute lookup - check both constructed and original definition
                 var attrData = typeSymbol.GetAttributes().FirstOrDefault(ad =>
                     ad.AttributeClass != null && (
                         ad.AttributeClass.Name.Contains("Primify") ||
@@ -162,33 +167,8 @@ namespace Primify.Generator
                          SymbolEqualityComparer.Default.Equals(ad.AttributeClass.OriginalDefinition, attributeSymbol))
                     ));
 
-                if (attrData == null) continue; // Not decorated with our attribute
+                if (attrData == null) continue;
 
-                // Validate: Must be partial
-                if (!typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(ErrorNotPartial, typeDeclSyntax.Identifier.GetLocation(),
-                        typeSymbol.Name, attributeSymbol.Name));
-                    continue;
-                }
-
-                // Validate: Must be a record class or record struct
-                if (!typeSymbol.IsRecord)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(ErrorNotRecordClassOrStruct,
-                        typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
-                    continue;
-                }
-
-                // Validate: Struct must be readonly
-                if (typeSymbol.IsValueType && !typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(ErrorNotReadonlyStruct,
-                        typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
-                    continue;
-                }
-
-                // Validate: Attribute has one type argument
                 if (attrData.AttributeClass?.TypeArguments.Length != 1)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(ErrorInvalidAttributeUsage,
@@ -199,7 +179,121 @@ namespace Primify.Generator
 
                 var primitiveTypeSymbol = attrData.AttributeClass.TypeArguments[0];
 
-                // Validate: Primitive type cannot be nullable directly in attribute
+                // Special handling for known system types that need support
+                bool isPrimitiveOrSupportedType = false;
+
+                // Check if it's an intrinsic type first
+                if (primitiveTypeSymbol.SpecialType != SpecialType.None)
+                {
+                    isPrimitiveOrSupportedType = true;
+                }
+                else
+                {
+                    // Check additional supported types by qualified name
+                    string fullQualifiedTypeName =
+                        primitiveTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    isPrimitiveOrSupportedType = fullQualifiedTypeName switch
+                    {
+                        "global::System.Guid" => true,
+                        "global::System.DateTime" => true,
+                        "global::System.TimeSpan" => true,
+                        "global::System.DateTimeOffset" => true,
+                        "global::System.DateOnly" => true,
+                        "global::System.TimeOnly" => true,
+                        // Add other supported types here if needed
+                        _ => false
+                    };
+                }
+
+                if (!isPrimitiveOrSupportedType)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(ErrorInvalidAttributeUsage,
+                        typeDeclSyntax.Identifier.GetLocation(), attributeSymbol.Name, typeSymbol.Name,
+                        $"The primitive type '{primitiveTypeSymbol.ToDisplayString()}' is not a supported primitive or system type"));
+                    continue;
+                }
+
+                var predefinedInstances = new List<(string PropertyName, object Value)>();
+                var userDefinedProperties = new HashSet<string>();
+
+                // Collect static properties as user-defined properties
+                foreach (var member in typeSymbol.GetMembers().OfType<IPropertySymbol>())
+                {
+                    if (member.IsStatic)
+                    {
+                        userDefinedProperties.Add(member.Name);
+                    }
+
+                    // Process PredefinedValueAttribute for static properties
+                    foreach (var attr in member.GetAttributes())
+                    {
+                        if (attr.AttributeClass?.Name is "PredefinedValueAttribute" or "PredefinedValue")
+                        {
+                            if (attr.ConstructorArguments.Length > 0 &&
+                                attr.ConstructorArguments[0].Value is object value)
+                            {
+                                // Get the type of the attribute value
+                                var valueTypeSymbol = GetValueType(value, primitiveTypeSymbol, compilation);
+
+                                // Check if the value type can be converted to the primitive type
+                                bool isCompatible = false;
+
+                                if (valueTypeSymbol != null)
+                                {
+                                    // Direct type equivalence
+                                    isCompatible =
+                                        SymbolEqualityComparer.Default.Equals(valueTypeSymbol, primitiveTypeSymbol);
+
+                                    // Or check for implicit conversions if not directly equal
+                                    if (!isCompatible && valueTypeSymbol.SpecialType != SpecialType.None &&
+                                        primitiveTypeSymbol.SpecialType != SpecialType.None)
+                                    {
+                                        // Check for numeric type compatibility
+                                        isCompatible = CanImplicitlyConvert(valueTypeSymbol.SpecialType,
+                                            primitiveTypeSymbol.SpecialType);
+                                    }
+                                }
+
+                                if (isCompatible)
+                                {
+                                    predefinedInstances.Add((member.Name, value));
+                                }
+                                else
+                                {
+                                    context.ReportDiagnostic(Diagnostic.Create(
+                                        ErrorInvalidAttributeUsage,
+                                        member.Locations.FirstOrDefault(),
+                                        "PredefinedValueAttribute",
+                                        typeSymbol.Name,
+                                        $"Value type '{(valueTypeSymbol?.ToDisplayString() ?? "unknown")}' does not match or cannot be converted to the primitive type '{primitiveTypeSymbol}'"));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Existing validation checks
+                if (!typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(ErrorNotPartial, typeDeclSyntax.Identifier.GetLocation(),
+                        typeSymbol.Name, attributeSymbol.Name));
+                    continue;
+                }
+
+                if (!typeSymbol.IsRecord)
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(ErrorNotRecordClassOrStruct,
+                        typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
+                    continue;
+                }
+
+                if (typeSymbol.IsValueType && !typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
+                {
+                    context.ReportDiagnostic(Diagnostic.Create(ErrorNotReadonlyStruct,
+                        typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
+                    continue;
+                }
+
                 if (primitiveTypeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
                 {
                     context.ReportDiagnostic(Diagnostic.Create(ErrorInvalidAttributeUsage,
@@ -208,40 +302,32 @@ namespace Primify.Generator
                     continue;
                 }
 
-                // --- Gather Info ---
+                // Gather remaining info
                 var typeName = typeSymbol.Name;
                 var ns = typeSymbol.ContainingNamespace.IsGlobalNamespace
                     ? null
                     : typeSymbol.ContainingNamespace.ToDisplayString();
-                var primitiveTypeName =
-                    primitiveTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                var primitiveTypeName = primitiveTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                 var fullTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                var isValueType = typeSymbol.IsValueType; // struct or record struct
-
-                // Determine C# keyword(s)
+                var isValueType = typeSymbol.IsValueType;
                 var typeKindKeyword = isValueType ? "readonly record struct" : "record class";
-
-                // Default to sealed for classes
                 var sealedModifier = !isValueType ? "sealed " : "";
-
-                // Determine converter names (nested)
                 var systemTextConverterName = "SystemTextJsonConverter";
                 var newtonsoftConverterName = "NewtonsoftJsonConverter";
 
-                // --- Detect existing Normalize and Validate implementations ---
-                var hasNormalize = typeSymbol
-                    .GetMembers()
+                var hasNormalize = typeSymbol.GetMembers()
                     .OfType<IMethodSymbol>()
                     .Any(m => m.Name == "Normalize" && m.Parameters.Length == 1 &&
                               m.Parameters[0].Type.ToDisplayString() == primitiveTypeName);
 
-                var hasValidate = typeSymbol
-                    .GetMembers()
+                var hasValidate = typeSymbol.GetMembers()
                     .OfType<IMethodSymbol>()
                     .Any(m => m.Name == "Validate" && m.Parameters.Length == 1 &&
-                              m.Parameters[0].Type.ToDisplayString() == primitiveTypeName);
+                              m.Parameters[0].Type.ToDisplayString()
+                                  .Equals(primitiveTypeName, StringComparison.Ordinal) &&
+                              m is { IsStatic: true, IsPartialDefinition: true });
 
-                typesToProcess.Add(new TypeInfo(
+                typesToProcess.Add(new WrapperTypeInfo(
                     TypeName: typeName,
                     Namespace: ns,
                     FullTypeName: fullTypeName,
@@ -253,36 +339,109 @@ namespace Primify.Generator
                     SystemTextConverterName: systemTextConverterName,
                     NewtonsoftConverterName: newtonsoftConverterName,
                     HasNormalizeImplementation: hasNormalize,
-                    HasValidateImplementation: hasValidate
+                    HasValidateImplementation: hasValidate,
+                    PredefinedInstances: predefinedInstances,
+                    UserDefinedProperties: userDefinedProperties
                 ));
-            }
-
-            // --- Phase 2: Generate Code ---
-            if (typesToProcess.Count > 0)
-            {
-                foreach (var typeInfo in typesToProcess)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(
-                        InfoGeneratedCode,
-                        Location.None,
-                        typeInfo.FullTypeName));
-
-                    // Generate the main implementation
-                    var generatedSource = GenerateImplementation(typeInfo);
-                    var safeFileName = typeInfo.FullTypeName.Replace("global::", "").Replace(".", "_").Replace(":", "_")
-                        .Replace("<", "_").Replace(">", "_");
-                    context.AddSource($"{safeFileName}.g.cs", SourceText.From(generatedSource, Encoding.UTF8));
-                }
-
-                // Generate the central LiteDB registration file
-                var registrationSource = GenerateLiteDbRegistration(typesToProcess);
-                context.AddSource("PrimifyLiteDbRegistration.g.cs",
-                    SourceText.From(registrationSource, Encoding.UTF8));
             }
         }
 
+        // Add this helper method to check if source can implicitly convert to target
+        private static bool CanImplicitlyConvert(SpecialType source, SpecialType target)
+        {
+            // Simple numeric conversion checks
+            switch (source)
+            {
+                case SpecialType.System_Byte:
+                case SpecialType.System_SByte:
+                case SpecialType.System_Int16:
+                case SpecialType.System_UInt16:
+                    return target is SpecialType.System_Int32 or SpecialType.System_Int64 or
+                        SpecialType.System_UInt32 or SpecialType.System_UInt64 or
+                        SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal;
+
+                case SpecialType.System_Int32:
+                    return target is SpecialType.System_Int64 or SpecialType.System_Single or
+                        SpecialType.System_Double or SpecialType.System_Decimal;
+
+                case SpecialType.System_UInt32:
+                    return target is SpecialType.System_Int64 or SpecialType.System_UInt64 or
+                        SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal;
+
+                case SpecialType.System_Int64:
+                case SpecialType.System_UInt64:
+                    return target is SpecialType.System_Single or SpecialType.System_Double
+                        or SpecialType.System_Decimal;
+
+                case SpecialType.System_Char:
+                    return target is SpecialType.System_Int32 or SpecialType.System_UInt32 or
+                        SpecialType.System_Int64 or SpecialType.System_UInt64 or
+                        SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Decimal;
+
+                case SpecialType.System_Single:
+                    return target is SpecialType.System_Double;
+
+                default:
+                    return false;
+            }
+        }
+
+        // Helper method to determine the type of the value
+        private static ITypeSymbol? GetValueType(object value, ITypeSymbol expectedType, Compilation compilation)
+        {
+            if (value == null) return null;
+
+            // For Guid specifically, handle string representations
+            if (expectedType.ToDisplayString() == "System.Guid" && value is string guidStr)
+            {
+                // Just return the Guid type when a string is provided for a Guid parameter
+                // The validation of the actual string happens elsewhere
+                return expectedType;
+            }
+
+            return value switch
+            {
+                string => compilation.GetTypeByMetadataName("System.String"),
+                int => compilation.GetTypeByMetadataName("System.Int32"),
+                bool => compilation.GetTypeByMetadataName("System.Boolean"),
+                char => compilation.GetTypeByMetadataName("System.Char"),
+                long => compilation.GetTypeByMetadataName("System.Int64"),
+                short => compilation.GetTypeByMetadataName("System.Int16"),
+                byte => compilation.GetTypeByMetadataName("System.Byte"),
+                float => compilation.GetTypeByMetadataName("System.Single"),
+                double => compilation.GetTypeByMetadataName("System.Double"),
+                decimal => compilation.GetTypeByMetadataName("System.Decimal"),
+                Guid => compilation.GetTypeByMetadataName("System.Guid"),
+                _ => null // Unsupported type, will trigger diagnostic
+            };
+        }
+
+        private static void Phase2GenerateCode(SourceProductionContext context, List<WrapperTypeInfo> typesToProcess)
+        {
+            if (typesToProcess.Count <= 0) return;
+
+            foreach (var typeInfo in typesToProcess)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InfoGeneratedCode,
+                    Location.None,
+                    typeInfo.FullTypeName));
+
+                // Generate the main implementation
+                var generatedSource = GenerateImplementation(typeInfo);
+                var safeFileName = typeInfo.FullTypeName.Replace("global::", "").Replace(".", "_").Replace(":", "_")
+                    .Replace("<", "_").Replace(">", "_");
+                context.AddSource($"{safeFileName}.g.cs", SourceText.From(generatedSource, Encoding.UTF8));
+            }
+
+            // Generate the central LiteDB registration file
+            var registrationSource = CodeBuilder.GenerateLiteDbRegistrationImplementation(typesToProcess);
+            context.AddSource("PrimifyLiteDbRegistration.g.cs",
+                SourceText.From(registrationSource, Encoding.UTF8));
+        }
+
         // Generates the implementation for a single type (record class or readonly record struct)
-        private static string GenerateImplementation(TypeInfo info)
+        private static string GenerateImplementation(WrapperTypeInfo info)
         {
             var sb = new StringBuilder();
             sb.AppendLine("// <auto-generated/>");
@@ -304,14 +463,7 @@ namespace Primify.Generator
             var nestedIndent = indent + "    ";
             var doubleNestedIndent = nestedIndent + "    ";
 
-            // Apply JsonConverter attributes pointing to nested converters
-            sb.AppendLine($"{indent}/// <summary>");
-            sb.AppendLine($"{indent}/// Represents a value wrapper for <see cref=\"{info.PrimitiveTypeName}\"/>.");
-            sb.AppendLine($"{indent}/// Generated by ValueWrapperGenerator.");
-            sb.AppendLine($"{indent}/// </summary>");
-            sb.AppendLine($"{indent}[JsonConverter(typeof({info.TypeName}.{info.SystemTextConverterName}))]");
-            sb.AppendLine(
-                $"{indent}[NewtonsoftJson.JsonConverter(typeof({info.TypeName}.{info.NewtonsoftConverterName}))]");
+            CodeBuilder.AppendJsonConverterAttributesPointingToConverters(info, sb, indent);
 
             // Parse the TypeKindKeyword to insert 'partial' in the right place
             string typeDeclaration;
@@ -336,28 +488,7 @@ namespace Primify.Generator
             sb.AppendLine($"{nestedIndent}public {info.PrimitiveTypeName} Value {{ get; }}");
             sb.AppendLine();
 
-            // Conditional Normalize implementation
-            sb.AppendLine(
-                $"{nestedIndent}/// <summary>Method for normalizing the primitive value during construction.</summary>");
-            // If user has a partial implementation, just declare the stub
-            sb.AppendLine(
-                info.HasNormalizeImplementation
-                    ? $"{nestedIndent}private static partial {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value);"
-                    // If no user implementation, provide the complete method
-                    : $"{nestedIndent}static {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value) => value;");
-
-            sb.AppendLine();
-
-            // Conditional Validate implementation
-            sb.AppendLine(
-                $"{nestedIndent}/// <summary>Method for validating the primitive value during construction.</summary>");
-            // If user has a partial implementation, just declare the stub
-            sb.AppendLine(info.HasValidateImplementation
-                ? $"{nestedIndent}static partial void Validate({info.PrimitiveTypeName} value);"
-                // If no user implementation, provide a no-op implementation
-                : $"{nestedIndent}static void Validate({info.PrimitiveTypeName} value) {{ /* No validation by default */ }}");
-
-            sb.AppendLine();
+            CodeBuilder.AppendPredefinedInstancesImplementation(info, sb, nestedIndent);
 
             // --- Constructor ---
             sb.AppendLine(
@@ -368,135 +499,13 @@ namespace Primify.Generator
             sb.AppendLine($"{nestedIndent}}}");
             sb.AppendLine();
 
-            // --- Factory Method ---
-            sb.AppendLine($"{nestedIndent}/// <summary>Creates a new instance from a primitive value.</summary>");
-            sb.AppendLine($"{nestedIndent}public static {info.TypeName} From({info.PrimitiveTypeName} value)");
-            sb.AppendLine($"{nestedIndent}{{");
-            sb.AppendLine($"{doubleNestedIndent}var normalized = Normalize(value);");
-            sb.AppendLine($"{doubleNestedIndent}Validate(normalized);");
-            sb.AppendLine($"{doubleNestedIndent}return new {info.TypeName}(normalized);");
-            sb.AppendLine($"{nestedIndent}}}");
-            sb.AppendLine();
-
-            // --- Implicit Conversions ---
-            sb.AppendLine(
-                $"{nestedIndent}/// <summary>Implicitly converts the wrapper to its primitive value.</summary>");
-            sb.AppendLine(
-                $"{nestedIndent}public static implicit operator {info.PrimitiveTypeName}({info.TypeName} self) => self.Value;");
-            sb.AppendLine();
-            sb.AppendLine(
-                $"{nestedIndent}/// <summary>Implicitly converts a primitive value to the wrapper type.</summary>");
-            sb.AppendLine(
-                $"{nestedIndent}public static implicit operator {info.TypeName}({info.PrimitiveTypeName} value) => From(value);");
-            sb.AppendLine();
-
-            // --- System.Text.Json Converter ---
-            sb.AppendLine($"{nestedIndent}/// <summary>Internal System.Text.Json converter.</summary>");
-            sb.AppendLine(
-                $"{nestedIndent}internal class {info.SystemTextConverterName} : JsonConverter<{info.TypeName}>");
-            sb.AppendLine($"{nestedIndent}{{");
-            // Return type is non-nullable for structs, nullable for classes
-            var readReturnType = info.IsValueType ? info.TypeName : $"{info.TypeName}?";
-            sb.AppendLine(
-                $"{doubleNestedIndent}public override {readReturnType} Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)");
-            sb.AppendLine($"{doubleNestedIndent}{{");
-            sb.AppendLine($"{doubleNestedIndent}    if (reader.TokenType == System.Text.Json.JsonTokenType.Null)");
-            sb.AppendLine($"{doubleNestedIndent}    {{");
-            // Return null for classes, default (which is default struct) for structs
-            sb.AppendLine(
-                $"{doubleNestedIndent}        return {(info.IsValueType ? $"default({info.TypeName})" : "null")};");
-            sb.AppendLine($"{doubleNestedIndent}    }}");
-            sb.AppendLine(
-                $"{doubleNestedIndent}    var primitiveValue = System.Text.Json.JsonSerializer.Deserialize<{info.PrimitiveTypeName}>(ref reader, options);");
-            sb.AppendLine($"{doubleNestedIndent}    // Use factory method instead of constructor for validation");
-            sb.AppendLine($"{doubleNestedIndent}    return {info.TypeName}.From(primitiveValue!);");
-            sb.AppendLine($"{doubleNestedIndent}}}");
-            sb.AppendLine();
-            sb.AppendLine(
-                $"{doubleNestedIndent}public override void Write(System.Text.Json.Utf8JsonWriter writer, {info.TypeName} value, System.Text.Json.JsonSerializerOptions options)");
-            sb.AppendLine($"{doubleNestedIndent}{{");
-            // Handle null classes passed to Write (structs cannot be null here)
-            if (!info.IsValueType)
-            {
-                sb.AppendLine($"{doubleNestedIndent}    if (value is null)");
-                sb.AppendLine($"{doubleNestedIndent}    {{");
-                sb.AppendLine($"{doubleNestedIndent}        writer.WriteNullValue();");
-                sb.AppendLine($"{doubleNestedIndent}        return;");
-                sb.AppendLine($"{doubleNestedIndent}    }}");
-            }
-
-            sb.AppendLine($"{doubleNestedIndent}    // Use implicit conversion to get primitive");
-            sb.AppendLine(
-                $"{doubleNestedIndent}    System.Text.Json.JsonSerializer.Serialize(writer, ({info.PrimitiveTypeName})value, options);");
-            sb.AppendLine($"{doubleNestedIndent}}}");
-            sb.AppendLine($"{nestedIndent}}}"); // Close SystemTextJsonConverter
-            sb.AppendLine();
-
-            // --- Newtonsoft.Json Converter ---
-            sb.AppendLine($"{nestedIndent}/// <summary>Internal Newtonsoft.Json converter.</summary>");
-            if (info.IsValueType)
-            {
-                // Struct implementation - No nullable parameter types
-                sb.AppendLine(
-                    $"{nestedIndent}internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
-                sb.AppendLine($"{nestedIndent}{{");
-                sb.AppendLine(
-                    $"{doubleNestedIndent}public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName} value, NewtonsoftJson.JsonSerializer serializer)");
-                sb.AppendLine($"{doubleNestedIndent}{{");
-                sb.AppendLine($"{doubleNestedIndent}    // Structs cannot be null, so no null check needed");
-                sb.AppendLine($"{doubleNestedIndent}    // Use implicit conversion to get primitive");
-                sb.AppendLine(
-                    $"{doubleNestedIndent}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
-                sb.AppendLine($"{doubleNestedIndent}}}");
-                sb.AppendLine();
-                sb.AppendLine(
-                    $"{doubleNestedIndent}public override {info.TypeName} ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName} existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
-                sb.AppendLine($"{doubleNestedIndent}{{");
-                sb.AppendLine($"{doubleNestedIndent}    if (reader.TokenType == NewtonsoftJson.JsonToken.Null)");
-                sb.AppendLine($"{doubleNestedIndent}    {{");
-                sb.AppendLine($"{doubleNestedIndent}        // Return default value for struct");
-                sb.AppendLine($"{doubleNestedIndent}        return default;");
-                sb.AppendLine($"{doubleNestedIndent}    }}");
-                sb.AppendLine(
-                    $"{doubleNestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
-                sb.AppendLine($"{doubleNestedIndent}    // Use factory method for validation");
-                sb.AppendLine($"{doubleNestedIndent}    return {info.TypeName}.From(primitiveValue!);");
-                sb.AppendLine($"{doubleNestedIndent}}}");
-            }
-            else
-            {
-                // Class implementation - With nullable parameter types
-                sb.AppendLine(
-                    $"{nestedIndent}internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
-                sb.AppendLine($"{nestedIndent}{{");
-                sb.AppendLine(
-                    $"{doubleNestedIndent}public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName}? value, NewtonsoftJson.JsonSerializer serializer)");
-                sb.AppendLine($"{doubleNestedIndent}{{");
-                sb.AppendLine($"{doubleNestedIndent}    if (value is null)");
-                sb.AppendLine($"{doubleNestedIndent}    {{");
-                sb.AppendLine($"{doubleNestedIndent}        writer.WriteNull();");
-                sb.AppendLine($"{doubleNestedIndent}        return;");
-                sb.AppendLine($"{doubleNestedIndent}    }}");
-                sb.AppendLine($"{doubleNestedIndent}    // Use implicit conversion to get primitive");
-                sb.AppendLine(
-                    $"{doubleNestedIndent}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
-                sb.AppendLine($"{doubleNestedIndent}}}");
-                sb.AppendLine();
-                sb.AppendLine(
-                    $"{doubleNestedIndent}public override {info.TypeName}? ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName}? existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
-                sb.AppendLine($"{doubleNestedIndent}{{");
-                sb.AppendLine($"{doubleNestedIndent}    if (reader.TokenType == NewtonsoftJson.JsonToken.Null)");
-                sb.AppendLine($"{doubleNestedIndent}    {{");
-                sb.AppendLine($"{doubleNestedIndent}        return null;");
-                sb.AppendLine($"{doubleNestedIndent}    }}");
-                sb.AppendLine(
-                    $"{doubleNestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
-                sb.AppendLine($"{doubleNestedIndent}    // Use factory method for validation");
-                sb.AppendLine($"{doubleNestedIndent}    return {info.TypeName}.From(primitiveValue!);");
-                sb.AppendLine($"{doubleNestedIndent}}}");
-            }
-
-            sb.AppendLine($"{nestedIndent}}}"); // Close NewtonsoftJsonConverter
+            CodeBuilder.AppendFactoryMethodImplementation(info, sb, nestedIndent, doubleNestedIndent);
+            CodeBuilder.AppendImplicitConvertersImplementation(info, sb, nestedIndent);
+            CodeBuilder.AppendNormalizeMethodImplementation(info, sb, nestedIndent);
+            CodeBuilder.AppendValidateMethodImplementation(info, sb, nestedIndent);
+            CodeBuilder.AppendToStringImplementation(info, sb, nestedIndent);
+            CodeBuilder.AppendSystemTextJsonConverterImplementation(info, sb, nestedIndent, doubleNestedIndent);
+            CodeBuilder.AppendNewtonsoftJsonConverterImplementation(info, sb, nestedIndent, doubleNestedIndent);
 
             sb.AppendLine($"{indent}}}"); // Close partial type
 
@@ -507,140 +516,26 @@ namespace Primify.Generator
 
             return sb.ToString();
         }
-
-        // Generates the central registration class ONLY for BSON mapping
-        private string GenerateLiteDbRegistration(List<TypeInfo> types)
-        {
-            var sb = new StringBuilder();
-            sb.AppendLine("// <auto-generated/>");
-            sb.AppendLine("#nullable enable");
-            sb.AppendLine("using System;");
-            sb.AppendLine("using LiteDB;");
-            sb.AppendLine("using System.Runtime.CompilerServices;");
-            sb.AppendLine();
-            // Add using directives for all namespaces containing the types
-            foreach (var ns in types.Select(t => t.Namespace).Where(n => !string.IsNullOrEmpty(n)).Distinct())
-            {
-                sb.AppendLine($"using {ns};");
-            }
-
-            sb.AppendLine();
-            sb.AppendLine("namespace Primify.Generated");
-            sb.AppendLine("{");
-            sb.AppendLine(
-                "    /// <summary>Provides BSON registration for types generated by ValueWrapperGenerator.</summary>");
-            sb.AppendLine("    internal static class PrimifyLiteDbRegistration");
-            sb.AppendLine("    {");
-            sb.AppendLine("        private static bool _initialized = false;");
-            sb.AppendLine();
-            sb.AppendLine("        /// <summary>Initializes BSON mappers using BsonMapper.Global.</summary>");
-            sb.AppendLine("        [ModuleInitializer]");
-            sb.AppendLine("        internal static void InitializeGlobalLiteDbBsonMappers()");
-            sb.AppendLine("        {");
-            sb.AppendLine("            RegisterLiteDbBsonMappers(BsonMapper.Global);");
-            sb.AppendLine("        }");
-            sb.AppendLine();
-            sb.AppendLine("        /// <summary>Registers BSON mappers with a specific BsonMapper instance.</summary>");
-            sb.AppendLine("        public static void RegisterLiteDbBsonMappers(BsonMapper mapper)");
-            sb.AppendLine("        {");
-            sb.AppendLine("            if (mapper == BsonMapper.Global && _initialized) return;");
-            sb.AppendLine("            if (mapper == null) throw new ArgumentNullException(nameof(mapper));");
-            sb.AppendLine();
-            foreach (var info in types)
-            {
-                string deserializeExpression;
-                string serializeExpression;
-
-                // Special handling for different primitive types
-                if (info.PrimitiveTypeSymbol.ToDisplayString() == "System.Guid")
-                {
-                    // Special handling for Guid
-                    serializeExpression = $"new BsonValue(({info.PrimitiveTypeName})value)";
-                    deserializeExpression = $"{info.FullTypeName}.From(bson.AsGuid)";
-                }
-                else if (info.PrimitiveTypeSymbol.SpecialType == SpecialType.System_DateTime)
-                {
-                    serializeExpression = $"new BsonValue(({info.PrimitiveTypeName})value)";
-                    deserializeExpression = $"{info.FullTypeName}.From(bson.AsDateTime)";
-                }
-                else
-                {
-                    // Standard handling for other types
-                    var bsonAccessor = GetBsonAccessor(info.PrimitiveTypeSymbol);
-                    serializeExpression = $"new BsonValue(({info.PrimitiveTypeName})value)";
-                    deserializeExpression = $"{info.FullTypeName}.From(bson.{bsonAccessor})";
-
-                    if (bsonAccessor == "RawValue")
-                    {
-                        sb.AppendLine(
-                            $"            // Warning: BSON mapping for {info.PrimitiveTypeName} used by {info.FullTypeName} using RawValue.");
-                    }
-                }
-
-                sb.AppendLine($"            mapper.RegisterType<{info.FullTypeName}>(");
-                sb.AppendLine($"                serialize: (value) => {serializeExpression},");
-                sb.AppendLine($"                deserialize: (bson) => {deserializeExpression});");
-            }
-
-            sb.AppendLine();
-            sb.AppendLine("            if (mapper == BsonMapper.Global) _initialized = true;");
-            sb.AppendLine("        }");
-            sb.AppendLine("    }"); // Close class
-            sb.AppendLine("}"); // Close namespace
-
-            return sb.ToString();
-        }
-
-        // Helper to get the LiteDB BsonValue accessor
-        private string GetBsonAccessor(ITypeSymbol primitiveTypeSymbol)
-        {
-            switch (primitiveTypeSymbol.SpecialType)
-            {
-                case SpecialType.System_Boolean: return "AsBoolean";
-                case SpecialType.System_Char: return "AsString";
-                case SpecialType.System_SByte: return "AsInt32";
-                case SpecialType.System_Byte: return "AsInt32";
-                case SpecialType.System_Int16: return "AsInt32";
-                case SpecialType.System_UInt16: return "AsInt32";
-                case SpecialType.System_Int32: return "AsInt32";
-                case SpecialType.System_UInt32: return "AsInt32";
-                case SpecialType.System_Int64: return "AsInt64";
-                case SpecialType.System_UInt64: return "AsDecimal";
-                case SpecialType.System_Single: return "AsDecimal";
-                case SpecialType.System_Double: return "AsDecimal";
-                case SpecialType.System_Decimal: return "AsDecimal";
-                case SpecialType.System_String: return "AsString";
-                case SpecialType.System_DateTime: return "AsDateTime";
-                default:
-                    if (primitiveTypeSymbol.ToDisplayString() == "System.Guid")
-                        return "AsGuid";
-                    if (primitiveTypeSymbol.ToDisplayString() == "System.DateTimeOffset")
-                        return "AsDateTime";
-                    if (primitiveTypeSymbol.ToDisplayString() == "System.TimeSpan")
-                        return "AsInt64";
-                    if (primitiveTypeSymbol.TypeKind == TypeKind.Enum)
-                        return "AsInt32";
-                    return "RawValue"; // Fallback, might not work for all types
-            }
-        }
-
-        /// <summary>
-        /// Internal record to store information about a type being processed.
-        /// </summary>
-        private record TypeInfo(
-            string TypeName,
-            string? Namespace,
-            string FullTypeName,
-            string PrimitiveTypeName,
-            ITypeSymbol PrimitiveTypeSymbol,
-            bool IsValueType,
-            string TypeKindKeyword,
-            string SealedModifier,
-            string SystemTextConverterName,
-            string NewtonsoftConverterName,
-            bool HasNormalizeImplementation,
-            bool HasValidateImplementation
-        );
     }
+
+    /// <summary>
+    /// Internal record to store information about a type being processed.
+    /// </summary>
+    internal record WrapperTypeInfo(
+        string TypeName,
+        string? Namespace,
+        string FullTypeName, // Fully qualified name (e.g., global::MyNamespace.MyType)
+        string PrimitiveTypeName, // Fully qualified name (e.g., global::System.Guid)
+        ITypeSymbol PrimitiveTypeSymbol,
+        bool IsValueType, // True for struct/readonly record struct
+        string TypeKindKeyword, // e.g., "readonly record struct", "record class"
+        string SealedModifier, // "sealed " or ""
+        string SystemTextConverterName,
+        string NewtonsoftConverterName,
+        bool HasNormalizeImplementation,
+        bool HasValidateImplementation,
+        List<(string PropertyName, object Value)>? PredefinedInstances = null,
+        HashSet<string> UserDefinedProperties = null
+    );
 }
 #endif
