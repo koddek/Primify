@@ -216,91 +216,9 @@ namespace Primify.Generator
                 var predefinedInstances = new List<(string PropertyName, object Value)>();
                 var userDefinedProperties = new HashSet<string>();
 
-                // Collect static properties as user-defined properties
-                foreach (var member in typeSymbol.GetMembers().OfType<IPropertySymbol>())
-                {
-                    if (member.IsStatic)
-                    {
-                        userDefinedProperties.Add(member.Name);
-                    }
+                GetPredefinedProperties(compilation, context, typeSymbol, userDefinedProperties, primitiveTypeSymbol, predefinedInstances);
 
-                    // Process PredefinedValueAttribute for static properties
-                    foreach (var attr in member.GetAttributes())
-                    {
-                        if (attr.AttributeClass?.Name is "PredefinedValueAttribute" or "PredefinedValue")
-                        {
-                            if (attr.ConstructorArguments.Length > 0 &&
-                                attr.ConstructorArguments[0].Value is object value)
-                            {
-                                // Get the type of the attribute value
-                                var valueTypeSymbol = GetValueType(value, primitiveTypeSymbol, compilation);
-
-                                // Check if the value type can be converted to the primitive type
-                                bool isCompatible = false;
-
-                                if (valueTypeSymbol != null)
-                                {
-                                    // Direct type equivalence
-                                    isCompatible =
-                                        SymbolEqualityComparer.Default.Equals(valueTypeSymbol, primitiveTypeSymbol);
-
-                                    // Or check for implicit conversions if not directly equal
-                                    if (!isCompatible && valueTypeSymbol.SpecialType != SpecialType.None &&
-                                        primitiveTypeSymbol.SpecialType != SpecialType.None)
-                                    {
-                                        // Check for numeric type compatibility
-                                        isCompatible = CanImplicitlyConvert(valueTypeSymbol.SpecialType,
-                                            primitiveTypeSymbol.SpecialType);
-                                    }
-                                }
-
-                                if (isCompatible)
-                                {
-                                    predefinedInstances.Add((member.Name, value));
-                                }
-                                else
-                                {
-                                    context.ReportDiagnostic(Diagnostic.Create(
-                                        ErrorInvalidAttributeUsage,
-                                        member.Locations.FirstOrDefault(),
-                                        "PredefinedValueAttribute",
-                                        typeSymbol.Name,
-                                        $"Value type '{(valueTypeSymbol?.ToDisplayString() ?? "unknown")}' does not match or cannot be converted to the primitive type '{primitiveTypeSymbol}'"));
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Existing validation checks
-                if (!typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(ErrorNotPartial, typeDeclSyntax.Identifier.GetLocation(),
-                        typeSymbol.Name, attributeSymbol.Name));
-                    continue;
-                }
-
-                if (!typeSymbol.IsRecord)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(ErrorNotRecordClassOrStruct,
-                        typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
-                    continue;
-                }
-
-                if (typeSymbol.IsValueType && !typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(ErrorNotReadonlyStruct,
-                        typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
-                    continue;
-                }
-
-                if (primitiveTypeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
-                {
-                    context.ReportDiagnostic(Diagnostic.Create(ErrorInvalidAttributeUsage,
-                        typeDeclSyntax.Identifier.GetLocation(), attributeSymbol.Name, typeSymbol.Name,
-                        $"The primitive type argument '{primitiveTypeSymbol.ToDisplayString()}' cannot be a nullable reference or value type"));
-                    continue;
-                }
+                if (ValidationChecks(context, attributeSymbol, typeDeclSyntax, typeSymbol, primitiveTypeSymbol)) continue;
 
                 // Gather remaining info
                 var typeName = typeSymbol.Name;
@@ -344,6 +262,105 @@ namespace Primify.Generator
                     UserDefinedProperties: userDefinedProperties
                 ));
             }
+        }
+
+        private static void GetPredefinedProperties(Compilation compilation, SourceProductionContext context,
+            INamedTypeSymbol typeSymbol, HashSet<string> userDefinedProperties, ITypeSymbol primitiveTypeSymbol,
+            List<(string PropertyName, object Value)> predefinedInstances
+        )
+        {
+            // Collect static properties as user-defined properties
+            foreach (var member in typeSymbol.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (member.IsStatic)
+                {
+                    userDefinedProperties.Add(member.Name);
+                }
+
+                // Process PredefinedValueAttribute for static properties
+                foreach (var attr in member.GetAttributes())
+                {
+                    if (attr.AttributeClass?.Name is "PredefinedValueAttribute" or "PredefinedValue")
+                    {
+                        if (attr.ConstructorArguments.Length > 0 &&
+                            attr.ConstructorArguments[0].Value is object value)
+                        {
+                            // Get the type of the attribute value
+                            var valueTypeSymbol = GetValueType(value, primitiveTypeSymbol, compilation);
+
+                            // Check if the value type can be converted to the primitive type
+                            bool isCompatible = false;
+
+                            if (valueTypeSymbol != null)
+                            {
+                                // Direct type equivalence
+                                isCompatible =
+                                    SymbolEqualityComparer.Default.Equals(valueTypeSymbol, primitiveTypeSymbol);
+
+                                // Or check for implicit conversions if not directly equal
+                                if (!isCompatible && valueTypeSymbol.SpecialType != SpecialType.None &&
+                                    primitiveTypeSymbol.SpecialType != SpecialType.None)
+                                {
+                                    // Check for numeric type compatibility
+                                    isCompatible = CanImplicitlyConvert(valueTypeSymbol.SpecialType,
+                                        primitiveTypeSymbol.SpecialType);
+                                }
+                            }
+
+                            if (isCompatible)
+                            {
+                                predefinedInstances.Add((member.Name, value));
+                            }
+                            else
+                            {
+                                context.ReportDiagnostic(Diagnostic.Create(
+                                    ErrorInvalidAttributeUsage,
+                                    member.Locations.FirstOrDefault(),
+                                    "PredefinedValueAttribute",
+                                    typeSymbol.Name,
+                                    $"Value type '{(valueTypeSymbol?.ToDisplayString() ?? "unknown")}' does not match or cannot be converted to the primitive type '{primitiveTypeSymbol}'"));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        private static bool ValidationChecks(SourceProductionContext context, INamedTypeSymbol attributeSymbol,
+            TypeDeclarationSyntax typeDeclSyntax, INamedTypeSymbol typeSymbol, ITypeSymbol primitiveTypeSymbol
+        )
+        {
+            // Existing validation checks
+            if (!typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(ErrorNotPartial, typeDeclSyntax.Identifier.GetLocation(),
+                    typeSymbol.Name, attributeSymbol.Name));
+                return true;
+            }
+
+            if (!typeSymbol.IsRecord)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(ErrorNotRecordClassOrStruct,
+                    typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
+                return true;
+            }
+
+            if (typeSymbol.IsValueType && !typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
+            {
+                context.ReportDiagnostic(Diagnostic.Create(ErrorNotReadonlyStruct,
+                    typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
+                return true;
+            }
+
+            if (primitiveTypeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(ErrorInvalidAttributeUsage,
+                    typeDeclSyntax.Identifier.GetLocation(), attributeSymbol.Name, typeSymbol.Name,
+                    $"The primitive type argument '{primitiveTypeSymbol.ToDisplayString()}' cannot be a nullable reference or value type"));
+                return true;
+            }
+
+            return false;
         }
 
         // Add this helper method to check if source can implicitly convert to target

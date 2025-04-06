@@ -43,16 +43,6 @@ internal static class CodeBuilder
         sb.AppendLine();
     }
 
-    public static void AppendToStringImplementation(WrapperTypeInfo info, StringBuilder sb, string indent)
-    {
-        sb.AppendLine($"{indent}/// <summary>");
-        sb.AppendLine($"{indent}/// Returns a string representation of the value.");
-        sb.AppendLine($"{indent}/// </summary>");
-        sb.AppendLine($"{indent}/// <returns>String representation of the underlying value.</returns>");
-        sb.AppendLine($"{indent}public override string ToString() => Value.ToString();");
-        sb.AppendLine();
-    }
-
     public static void AppendNormalizeMethodImplementation(WrapperTypeInfo info, StringBuilder sb, in string indent1)
     {
         var summaryDocStart = $"{indent1}/// <summary>";
@@ -75,6 +65,16 @@ internal static class CodeBuilder
             ? $"{indent1}private static partial {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value);"
             // If no user implementation, provide the default (no-op) implementation without an access modifier
             : $"{indent1}static {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value) => value;");
+        sb.AppendLine();
+    }
+
+    public static void AppendToStringImplementation(WrapperTypeInfo info, StringBuilder sb, string indent)
+    {
+        sb.AppendLine($"{indent}/// <summary>");
+        sb.AppendLine($"{indent}/// Returns a string representation of the value.");
+        sb.AppendLine($"{indent}/// </summary>");
+        sb.AppendLine($"{indent}/// <returns>String representation of the underlying value.</returns>");
+        sb.AppendLine($"{indent}public override string ToString() => Value.ToString();");
         sb.AppendLine();
     }
 
