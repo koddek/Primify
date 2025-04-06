@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src\Primify.Attributes\Primify.Attributes.csproj" Type="Classic C#" />
     <Project Path="src\Primify.Generator\Primify.Generator.csproj" Type="Classic C#" />
+    <Project Path="src\Primify\Primify.csproj" Type="Classic C#" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests\Primify.Tests\Primify.Tests.csproj" Type="Classic C#" />

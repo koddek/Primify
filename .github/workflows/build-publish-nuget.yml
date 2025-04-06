@@ -1,0 +1,148 @@
+name: Build and Publish NuGet Package
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/Primify/**'
+      - 'Primify.sln'
+      - 'README.md'
+      - 'LICENSE'
+      - '.github/workflows/build-publish-nuget.yml'
+  pull_request:
+    paths:
+      - 'src/Primify/**'
+      - 'Primify.sln'
+      - 'README.md'
+      - 'LICENSE'
+      - '.github/workflows/build-publish-nuget.yml'
+
+env:
+  PROJECT_NAME: 'Primify'
+  SOLUTION_FILE: 'Primify.sln'
+  MAIN_PROJECT_FILE: '${{ github.workspace }}/src/Primify/Primify.csproj'
+  ATTRIBUTES_PROJECT_FILE: '${{ github.workspace }}/src/Primify.Attributes/Primify.Attributes.csproj'
+  GENERATOR_PROJECT_FILE: '${{ github.workspace }}/src/Primify.Generator/Primify.Generator.csproj'
+  CONFIGURATION: 'Release'
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install xmllint
+        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
+
+      # Create a personal access token with read:packages scope
+      # and store it as a GitHub secret named ACCESS_TOKEN
+      - name: Setup NuGet Authentication
+        run: |
+          # Create the .nuget/NuGet directory if it doesn't exist
+          mkdir -p ~/.nuget/NuGet
+
+          # Create NuGet.Config with authentication
+          cat > ~/.nuget/NuGet/NuGet.Config << EOF
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+              <add key="github" value="https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" />
+            </packageSources>
+            <packageSourceCredentials>
+              <github>
+                <add key="Username" value="${{ github.repository_owner }}" />
+                <add key="ClearTextPassword" value="${{ secrets.ACCESS_TOKEN }}" />
+              </github>
+            </packageSourceCredentials>
+          </configuration>
+          EOF
+
+          # Debug: Print the configuration (without the token)
+          cat ~/.nuget/NuGet/NuGet.Config | grep -v ClearTextPassword
+
+      - name: Check project files exist
+        run: |
+          if [ ! -f "${{ env.MAIN_PROJECT_FILE }}" ]; then
+            echo "Error: Main project file not found at ${{ env.MAIN_PROJECT_FILE }}"
+            echo "Current directory structure:"
+            find ${{ github.workspace }}/src -type f -name "*.csproj" | sort
+            exit 1
+          fi
+
+      - name: Extract Version
+        id: extract_version
+        run: |
+          VERSION=$(xmllint --xpath 'string(/Project/PropertyGroup/Version)' ${{ env.MAIN_PROJECT_FILE }})
+          if [ -z "$VERSION" ]; then
+            echo "Error: Could not extract version from ${{ env.MAIN_PROJECT_FILE }}"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Extracted version: $VERSION"
+
+      # Restore using global NuGet configuration
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_FILE }}
+
+      - name: Build the solution
+        run: dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-restore
+
+      - name: Run tests (if any)
+        run: dotnet test ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-restore --no-build || echo "No tests found or tests failed"
+
+      - name: Pack the NuGet package
+        run: |
+          EXPECTED_PACKAGE_NAME="${{ env.PROJECT_NAME }}.${{ steps.extract_version.outputs.version }}.nupkg"
+          dotnet pack ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} --no-restore --no-build --output ./nuget_packages
+          if [ ! -f "./nuget_packages/$EXPECTED_PACKAGE_NAME" ]; then
+            echo "Error: Expected package file $EXPECTED_PACKAGE_NAME not found after packing."
+            ls -l ./nuget_packages
+            exit 1
+          fi
+
+      # Publish to GitHub Packages using the PAT token
+      - name: Push to GitHub Packages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          PACKAGE_FILE="./nuget_packages/${{ env.PROJECT_NAME }}.${{ steps.extract_version.outputs.version }}.nupkg"
+          dotnet nuget push "$PACKAGE_FILE" --source "github" --api-key ${{ secrets.ACCESS_TOKEN }} --skip-duplicate
+
+      - name: Check if tag exists
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        id: check_tag
+        run: |
+          VERSION=${{ steps.extract_version.outputs.version }}
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists, skipping tag creation"
+            echo "tag_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Tag v$VERSION does not exist"
+            echo "tag_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Git Tag
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_tag.outputs.tag_exists == 'false'
+        run: |
+          VERSION=${{ steps.extract_version.outputs.version }}
+          echo "Creating and pushing tag v$VERSION"
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"

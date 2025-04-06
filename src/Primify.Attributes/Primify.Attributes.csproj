@@ -1,9 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-        <PackageId>Primify</PackageId>
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+        <PackageId>Primify.Attributes</PackageId>
         <Version>1.0.0</Version>
-        <Description>A library providing attributes for Primify source generation, enabling custom value types with JSON serialization.</Description>
+        <Description>Attributes for Primify source generation.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson</PackageTags>
     </PropertyGroup>
 </Project>
