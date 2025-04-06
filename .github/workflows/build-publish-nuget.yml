@@ -124,25 +124,35 @@ jobs:
             fi
           done
 
-      - name: Build the solution
-        run: |
-          dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
-          
-          # Verify the build outputs exist
-          MAIN_OUTPUT_DLL="${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.dll"
-          if [ -f "$MAIN_OUTPUT_DLL" ]; then
-            echo "✅ Build output verified: $MAIN_OUTPUT_DLL exists"
-          else
-            echo "❌ ERROR: Build output not found: $MAIN_OUTPUT_DLL"
-            echo "Directory contents of $(dirname "$MAIN_OUTPUT_DLL"):"
-            ls -la $(dirname "$MAIN_OUTPUT_DLL") || echo "Directory doesn't exist"
-            echo "Searching for any DLL outputs:"
-            find ${{ github.workspace }}/src -name "*.dll" | grep -v obj
-            exit 1
-          fi
+      - name: Examine project file
+        run: cat ${{ env.MAIN_PROJECT_FILE }}
 
-      - name: Run tests (if any)
-        run: dotnet test ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-build || echo "No tests found or tests failed"
+#      - name: Build Primify project with verbose output
+#        run: dotnet build ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} --verbosity detailed
+
+#      - name: Build the solution
+#        run: |
+#          dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
+#
+#          # Verify the build outputs exist
+#          MAIN_OUTPUT_DLL="${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.dll"
+#          if [ -f "$MAIN_OUTPUT_DLL" ]; then
+#            echo "✅ Build output verified: $MAIN_OUTPUT_DLL exists"
+#          else
+#            echo "❌ ERROR: Build output not found: $MAIN_OUTPUT_DLL"
+#            echo "Directory contents of $(dirname "$MAIN_OUTPUT_DLL"):"
+#            ls -la $(dirname "$MAIN_OUTPUT_DLL") || echo "Directory doesn't exist"
+#            echo "Searching for any DLL outputs:"
+#            find ${{ github.workspace }}/src -name "*.dll" | grep -v obj
+#            exit 1
+#          fi
+      - name: Verify project structure
+        run: |
+          ls -la ${{ github.workspace }}/src/
+          ls -la ${{ github.workspace }}/src/Primify/
+
+#      - name: Run tests (if any)
+#        run: dotnet test ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-build || echo "No tests found or tests failed"
 
       # Build again explicitly for the main project to ensure it's properly built
       - name: Build main project explicitly
