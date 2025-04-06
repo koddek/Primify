@@ -125,10 +125,48 @@ jobs:
           done
 
       - name: Build the solution
-        run: dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
+        run: |
+          dotnet build ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
+          
+          # Verify the build outputs exist
+          MAIN_OUTPUT_DLL="${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.dll"
+          if [ -f "$MAIN_OUTPUT_DLL" ]; then
+            echo "✅ Build output verified: $MAIN_OUTPUT_DLL exists"
+          else
+            echo "❌ ERROR: Build output not found: $MAIN_OUTPUT_DLL"
+            echo "Directory contents of $(dirname "$MAIN_OUTPUT_DLL"):"
+            ls -la $(dirname "$MAIN_OUTPUT_DLL") || echo "Directory doesn't exist"
+            echo "Searching for any DLL outputs:"
+            find ${{ github.workspace }}/src -name "*.dll" | grep -v obj
+            exit 1
+          fi
 
       - name: Run tests (if any)
         run: dotnet test ${{ env.SOLUTION_FILE }} --configuration ${{ env.CONFIGURATION }} --no-build || echo "No tests found or tests failed"
+
+      # Build again explicitly for the main project to ensure it's properly built
+      - name: Build main project explicitly
+        run: |
+          echo "Explicitly building ${{ env.MAIN_PROJECT_FILE }}"
+          dotnet build ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }}
+          
+          # Verify the build output exists
+          MAIN_OUTPUT_DLL="${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }}/netstandard2.0/Primify.dll"
+          if [ -f "$MAIN_OUTPUT_DLL" ]; then
+            echo "✅ Main project build output verified"
+            ls -la $(dirname "$MAIN_OUTPUT_DLL")
+          else
+            echo "❌ ERROR: Main project build output still not found!"
+            exit 1
+          fi
+
+      - name: Check target framework in project file
+        run: |
+          echo "Checking target framework in project file:"
+          grep -A 5 TargetFramework ${{ env.MAIN_PROJECT_FILE }} || echo "TargetFramework not found"
+          # Check the actual output directories
+          echo "Checking actual build output directories:"
+          find ${{ github.workspace }}/src/Primify/bin/${{ env.CONFIGURATION }} -type d -maxdepth 1
 
       - name: Pack the NuGet package
         run: |
@@ -136,11 +174,18 @@ jobs:
           dotnet restore ${{ env.MAIN_PROJECT_FILE }} --force
           
           EXPECTED_PACKAGE_NAME="${{ env.PROJECT_NAME }}.${{ steps.extract_version.outputs.version }}.nupkg"
-          dotnet pack ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }} --output ./nuget_packages
+          echo "Creating output directory for packages"
+          mkdir -p ./nuget_packages
+          
+          echo "Packing project with explicit output path"
+          dotnet pack ${{ env.MAIN_PROJECT_FILE }} --configuration ${{ env.CONFIGURATION }} /p:SignAssembly=true /p:AssemblyOriginatorKeyFile=${{ env.SNK_FILE }} --output ./nuget_packages --no-build
           
           if [ ! -f "./nuget_packages/$EXPECTED_PACKAGE_NAME" ]; then
             echo "Error: Expected package file $EXPECTED_PACKAGE_NAME not found after packing."
+            echo "Contents of nuget_packages directory:"
             ls -l ./nuget_packages
+            echo "Trying to find the package anywhere:"
+            find ${{ github.workspace }} -name "*.nupkg"
             exit 1
           fi
 
