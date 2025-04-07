@@ -374,8 +374,6 @@ internal static class CodeBuilder
         }
     }
 
-    // New code for Instance members
-
     public static void AppendPredefinedInstancesImplementation(WrapperTypeInfo info, StringBuilder sb, string indent)
     {
         if (info.PredefinedInstances == null || info.PredefinedInstances.Count == 0)
@@ -383,16 +381,47 @@ internal static class CodeBuilder
 
         sb.AppendLine($"{indent}#region Predefined Instances");
         sb.AppendLine();
+
+        sb.AppendLine("#pragma warning disable IDE1006");
+        // Generate the private static readonly fields
+        foreach (var instance in info.PredefinedInstances)
+        {
+            var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
+            sb.AppendLine($"{indent}private static readonly {info.TypeName} {fieldName};");
+        }
+
+        sb.AppendLine("#pragma warning restore IDE1006");
+        sb.AppendLine();
+
+        // Generate the static constructor to initialize the fields
         sb.AppendLine($"{indent}static {info.TypeName}()");
         sb.AppendLine($"{indent}{{");
         foreach (var instance in info.PredefinedInstances)
         {
+            var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
             var formattedValue = FormatValue(info.PrimitiveTypeSymbol, instance.Value);
-            sb.AppendLine($"{indent}    {instance.PropertyName} = new {info.TypeName}({formattedValue});");
+            sb.AppendLine($"{indent}    {fieldName} = new {info.TypeName}({formattedValue});");
         }
 
         sb.AppendLine($"{indent}}}");
         sb.AppendLine();
+
+        // Generate readonly properties for each predefined instance
+        foreach (var instance in info.PredefinedInstances)
+        {
+            var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
+            var propertyName = instance.PropertyName;
+
+            sb.AppendLine($"{indent}/// <summary>");
+            sb.AppendLine($"{indent}/// Gets the predefined {info.TypeName} instance for '{propertyName}'.");
+            sb.AppendLine($"{indent}/// </summary>");
+            sb.AppendLine($"{indent}[System.Text.Json.Serialization.JsonIgnore]");
+            sb.AppendLine($"{indent}[NewtonsoftJson.JsonIgnore]");
+            sb.AppendLine($"{indent}[LiteDB.BsonIgnore]");
+            sb.AppendLine($"{indent}public static partial {info.TypeName} {propertyName} => {fieldName};");
+            sb.AppendLine();
+        }
+
         sb.AppendLine($"{indent}#endregion");
         sb.AppendLine();
     }

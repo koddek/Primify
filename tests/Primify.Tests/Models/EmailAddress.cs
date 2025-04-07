@@ -7,10 +7,10 @@ namespace Primify.Tests.Models;
 public partial record class EmailAddress
 {
     [PredefinedValue("")]
-    public static EmailAddress Empty { get; }
+    public static partial EmailAddress Empty { get; }
 
     [PredefinedValue("undefined@example.com")]
-    public static EmailAddress Undefined { get; }
+    public static partial EmailAddress Undefined { get; }
 
     // Custom validation logic
     static partial void Validate(string value)

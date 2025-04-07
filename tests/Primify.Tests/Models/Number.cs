@@ -7,10 +7,10 @@ namespace Primify.Tests.Models;
 public partial record class Number
 {
     [PredefinedValue(0)]
-    public static Number Empty { get; }
+    public static partial Number Empty { get; }
 
     [PredefinedValue(-1)]
-    public static Number Undefined { get; }
+    public static partial Number Undefined { get; }
 
     // Custom validation logic
     static partial void Validate(int value)

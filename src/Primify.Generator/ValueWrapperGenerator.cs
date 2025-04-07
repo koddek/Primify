@@ -74,6 +74,22 @@ namespace Primify.Generator
             defaultSeverity: DiagnosticSeverity.Info,
             isEnabledByDefault: true);
 
+        private static readonly DiagnosticDescriptor InfoPartialMethodAvailable = new(
+            id: "VWG007",
+            title: "Partial Method Available",
+            messageFormat: "Partial method '{0}' can be implemented to add custom {1} logic for '{2}'",
+            category: "ValueWrapperGenerator",
+            defaultSeverity: DiagnosticSeverity.Info,
+            isEnabledByDefault: true);
+
+        private static readonly DiagnosticDescriptor ErrorPredefinedFieldRequirements = new(
+            id: "VWG008",
+            title: "Invalid Predefined Field",
+            messageFormat: "Field '{0}' decorated with PredefinedValueAttribute must be static, readonly, and private",
+            category: "ValueWrapperGenerator",
+            defaultSeverity: DiagnosticSeverity.Error,
+            isEnabledByDefault: true);
+
         // --- Attribute Name ---
         private const string AttributeFullName = "Primify.Attributes.PrimifyAttribute`1";
 
@@ -216,9 +232,11 @@ namespace Primify.Generator
                 var predefinedInstances = new List<(string PropertyName, object Value)>();
                 var userDefinedProperties = new HashSet<string>();
 
-                GetPredefinedProperties(compilation, context, typeSymbol, userDefinedProperties, primitiveTypeSymbol, predefinedInstances);
+                GetPredefinedProperties(compilation, context, typeSymbol, userDefinedProperties, primitiveTypeSymbol,
+                    predefinedInstances);
 
-                if (ValidationChecks(context, attributeSymbol, typeDeclSyntax, typeSymbol, primitiveTypeSymbol)) continue;
+                if (ValidationChecks(context, attributeSymbol, typeDeclSyntax, typeSymbol, primitiveTypeSymbol))
+                    continue;
 
                 // Gather remaining info
                 var typeName = typeSymbol.Name;
@@ -262,6 +280,20 @@ namespace Primify.Generator
                     UserDefinedProperties: userDefinedProperties
                 ));
             }
+
+            // At the end of the method, add the analyzer for partial methods for each valid type
+            foreach (var typeInfo in typesToProcess)
+            {
+                var typeSyntax = types.FirstOrDefault(t =>
+                    compilation.GetSemanticModel(t.SyntaxTree)
+                        .GetDeclaredSymbol(t)?.ToDisplayString() == typeInfo.FullTypeName);
+
+                if (typeSyntax != null)
+                {
+                    // This should be calling the instance method
+                    ((ValueWrapperGenerator)null).AddPartialMethodAnalyzers(context, typeInfo, typeSyntax);
+                }
+            }
         }
 
         private static void GetPredefinedProperties(Compilation compilation, SourceProductionContext context,
@@ -269,60 +301,121 @@ namespace Primify.Generator
             List<(string PropertyName, object Value)> predefinedInstances
         )
         {
-            // Collect static properties as user-defined properties
+            // Collect static properties defined by the user to avoid generating duplicates
             foreach (var member in typeSymbol.GetMembers().OfType<IPropertySymbol>())
             {
                 if (member.IsStatic)
                 {
                     userDefinedProperties.Add(member.Name);
                 }
+            }
 
-                // Process PredefinedValueAttribute for static properties
-                foreach (var attr in member.GetAttributes())
+            // Find properties decorated with PredefinedValueAttribute
+            foreach (var propertySymbol in typeSymbol.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (!propertySymbol.IsStatic)
                 {
-                    if (attr.AttributeClass?.Name is "PredefinedValueAttribute" or "PredefinedValue")
+                    continue;
+                }
+
+                var attr = propertySymbol.GetAttributes().FirstOrDefault(a =>
+                    a.AttributeClass?.Name is "PredefinedValueAttribute" or "PredefinedValue");
+
+                if (attr != null)
+                {
+                    // Check if the property is declared as partial in syntax
+                    bool isPartialProperty = false;
+                    foreach (var syntaxReference in propertySymbol.DeclaringSyntaxReferences)
                     {
-                        if (attr.ConstructorArguments.Length > 0 &&
-                            attr.ConstructorArguments[0].Value is object value)
+                        if (syntaxReference.GetSyntax() is PropertyDeclarationSyntax propertySyntax &&
+                            propertySyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
                         {
-                            // Get the type of the attribute value
-                            var valueTypeSymbol = GetValueType(value, primitiveTypeSymbol, compilation);
+                            isPartialProperty = true;
+                            break;
+                        }
+                    }
 
-                            // Check if the value type can be converted to the primitive type
-                            bool isCompatible = false;
+                    if (!isPartialProperty)
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            new DiagnosticDescriptor(
+                                "VWG009",
+                                "Invalid Predefined Property",
+                                "Property '{0}' decorated with PredefinedValueAttribute must be declared with the 'partial' keyword",
+                                "ValueWrapperGenerator",
+                                DiagnosticSeverity.Error,
+                                isEnabledByDefault: true),
+                            propertySymbol.Locations.FirstOrDefault(),
+                            propertySymbol.Name));
+                        continue;
+                    }
 
-                            if (valueTypeSymbol != null)
+                    if (attr.ConstructorArguments.Length > 0 &&
+                        attr.ConstructorArguments[0].Value is { } value)
+                    {
+                        var valueTypeSymbol = GetValueType(value, primitiveTypeSymbol, compilation);
+                        bool isCompatible = false;
+
+                        if (valueTypeSymbol != null)
+                        {
+                            isCompatible = SymbolEqualityComparer.Default.Equals(valueTypeSymbol, primitiveTypeSymbol);
+                            if (!isCompatible && valueTypeSymbol.SpecialType != SpecialType.None &&
+                                primitiveTypeSymbol.SpecialType != SpecialType.None)
                             {
-                                // Direct type equivalence
-                                isCompatible =
-                                    SymbolEqualityComparer.Default.Equals(valueTypeSymbol, primitiveTypeSymbol);
-
-                                // Or check for implicit conversions if not directly equal
-                                if (!isCompatible && valueTypeSymbol.SpecialType != SpecialType.None &&
-                                    primitiveTypeSymbol.SpecialType != SpecialType.None)
-                                {
-                                    // Check for numeric type compatibility
-                                    isCompatible = CanImplicitlyConvert(valueTypeSymbol.SpecialType,
-                                        primitiveTypeSymbol.SpecialType);
-                                }
+                                isCompatible = CanImplicitlyConvert(valueTypeSymbol.SpecialType,
+                                    primitiveTypeSymbol.SpecialType);
                             }
-
-                            if (isCompatible)
+                            // Handle Guid specifically if primitive is Guid and value is string
+                            else if (!isCompatible && primitiveTypeSymbol.ToDisplayString() == "global::System.Guid" &&
+                                     value is string)
                             {
-                                predefinedInstances.Add((member.Name, value));
+                                isCompatible = Guid.TryParse(value.ToString(), out _);
+                                isCompatible = true;
                             }
-                            else
-                            {
-                                context.ReportDiagnostic(Diagnostic.Create(
-                                    ErrorInvalidAttributeUsage,
-                                    member.Locations.FirstOrDefault(),
-                                    "PredefinedValueAttribute",
-                                    typeSymbol.Name,
-                                    $"Value type '{(valueTypeSymbol?.ToDisplayString() ?? "unknown")}' does not match or cannot be converted to the primitive type '{primitiveTypeSymbol}'"));
-                            }
+                        }
+
+                        if (isCompatible)
+                        {
+                            predefinedInstances.Add((propertySymbol.Name, value));
+                        }
+                        else
+                        {
+                            context.ReportDiagnostic(Diagnostic.Create(
+                                ErrorInvalidAttributeUsage,
+                                propertySymbol.Locations.FirstOrDefault(),
+                                "PredefinedValueAttribute",
+                                typeSymbol.Name,
+                                $"Value type '{(valueTypeSymbol?.ToDisplayString() ?? value?.GetType().Name ?? "unknown")}' for property '{propertySymbol.Name}' does not match or cannot be converted to the primitive type '{primitiveTypeSymbol.ToDisplayString()}'"));
                         }
                     }
                 }
+            }
+        }
+
+        private void AddPartialMethodAnalyzers(SourceProductionContext context, WrapperTypeInfo info,
+            TypeDeclarationSyntax typeDecl
+        )
+        {
+            // Check if user has implemented the Normalize method
+            if (!info.HasNormalizeImplementation)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InfoPartialMethodAvailable,
+                    typeDecl.Identifier.GetLocation(),
+                    "Normalize",
+                    "normalization",
+                    info.TypeName));
+            }
+
+            // Check if user has implemented the Validate method
+            if (!info.HasValidateImplementation)
+            {
+                context.ReportDiagnostic(Diagnostic.Create(
+                    InfoPartialMethodAvailable,
+                    typeDecl.Identifier.GetLocation(),
+                    "Validate",
+                    "validation",
+                    info.TypeName));
             }
         }
 

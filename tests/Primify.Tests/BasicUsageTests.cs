@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using LiteDB;
 using Primify.Tests.Models;
 using TUnit;
+using TUnit.Assertions.AssertConditions.Throws;
 using JsonSerializer = LiteDB.JsonSerializer;
 
 namespace Primify.Tests;
@@ -186,24 +187,141 @@ public class BasicUsageTests
         await Assert.That(result.ToString()).IsEqualTo(expected);
     }
 
-    /*[Test]
-    public async Task ItemId_PersistsToLiteDB_Correctly()
+    [Test]
+    public async Task Username_ReturnsUndefinedValue_Correctly()
     {
         // Arrange
-        var order = new Order
-        {
-            Id = OrderId.From(),
-            Customer = CustomerName.From("Alice Smith"),
-            Quantity = Quantity.From(5)
-        };
+        var expected = "guest";
 
         // Act
-        using var db = new LiteDatabase(":memory:");
-        var col = db.GetCollection<Order>("orders");
-        col.Insert(order);
-        var retrieved = col.FindOne(o => o.Id == OrderId.From(1001));
+        var username = Username.Undefined;
 
         // Assert
-        await Assert.That(retrieved).IsEquivalentTo(order);
-    }*/
+        await Assert.That(username.Value).IsEquivalentTo(expected);
+    }
+
+    [Test]
+    public async Task PredefinedValues_AreCorrectlyInitialized()
+    {
+        // Test both predefined values
+        await Assert.That(Username.Empty.Value).IsEquivalentTo("");
+        await Assert.That(Username.Undefined.Value).IsEquivalentTo("guest");
+    }
+
+    [Test]
+    public async Task FromMethod_CreatesInstanceWithCorrectValue()
+    {
+        // Arrange
+        var testValue = "testUser";
+
+        // Act
+        var username = Username.From(testValue);
+
+        // Assert
+        await Assert.That(username.Value).IsEquivalentTo(testValue.ToLower()); // Tests normalization
+    }
+
+    [Test]
+    public async Task ImplicitConversion_WorksCorrectly()
+    {
+        // Arrange
+        var testValue = "implicitUser";
+
+        // Act
+        Username username = testValue; // Uses implicit conversion
+
+        // Assert
+        await Assert.That(username.Value).IsEquivalentTo(testValue.ToLower());
+    }
+
+    [Test]
+    public async Task ExplicitConversion_WorksCorrectly()
+    {
+        // Arrange
+        var username = Username.From("explicitUser");
+
+        // Act
+        var stringValue = (string)username; // Uses explicit conversion
+
+        // Assert
+        await Assert.That(stringValue).IsEquivalentTo("explicituser");
+    }
+
+    [Test]
+    public async Task Validation_RejectsInvalidValues()
+    {
+        // Arrange
+        var invalidValue = "invalid@user";
+
+        // Act & Assert
+        await Assert.That(() => Username.From(invalidValue))
+            .Throws<ArgumentException>();
+    }
+
+    [Test]
+    public async Task Normalization_AppliesCorrectly()
+    {
+        // Arrange
+        var mixedCase = "MixedCaseUser";
+
+        // Act
+        var username = Username.From(mixedCase);
+
+        // Assert
+        await Assert.That(username.Value).IsEquivalentTo(mixedCase.ToLower());
+    }
+
+    [Test]
+    public async Task JsonSerialization_WorksCorrectly()
+    {
+        // Arrange
+        var username = Username.From("jsonUser");
+        var expectedJson = $"\"{username.Value}\"";
+
+        // Act
+        var json = System.Text.Json.JsonSerializer.Serialize(username);
+
+        // Assert
+        await Assert.That(json).IsEquivalentTo(expectedJson);
+    }
+
+    [Test]
+    public async Task JsonDeserialization_WorksCorrectly()
+    {
+        // Arrange
+        var testValue = "deserializedUser";
+        var json = $"\"{testValue}\"";
+
+        // Act
+        var username = System.Text.Json.JsonSerializer.Deserialize<Username>(json);
+
+        // Assert
+        await Assert.That(username.Value).IsEquivalentTo(testValue.ToLower());
+    }
+
+    [Test]
+    public async Task ToString_ReturnsUnderlyingValue()
+    {
+        // Arrange
+        var testValue = "stringUser";
+        var username = Username.From(testValue);
+
+        // Act & Assert
+        await Assert.That(username.ToString()).IsEquivalentTo(testValue.ToLower());
+    }
+
+    [Test]
+    public async Task PredefinedValues_AreIgnoredInSerialization()
+    {
+        // Arrange
+        var expected = """{"Username":"guest"}""";
+        var obj = new { Username = Username.Undefined };
+
+        // Act
+        var json = System.Text.Json.JsonSerializer.Serialize(obj);
+        Console.WriteLine(json);
+
+        // Assert
+        await Assert.That(json).IsEquivalentTo(expected);
+    }
 }
