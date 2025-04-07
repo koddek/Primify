@@ -87,27 +87,6 @@ public class BasicUsageTests
     }
 
     [Test]
-    public async Task Order_PersistsToLiteDB_Correctly()
-    {
-        // Arrange
-        var order = new Order
-        {
-            Id = OrderId.From(1001),
-            Customer = CustomerName.From("Alice Smith"),
-            Quantity = Quantity.From(5)
-        };
-
-        // Act
-        using var db = new LiteDatabase(":memory:");
-        var col = db.GetCollection<Order>("orders");
-        col.Insert(order);
-        var retrieved = col.FindOne(o => o.Id == OrderId.From(1001));
-
-        // Assert
-        await Assert.That(retrieved).IsEquivalentTo(order);
-    }
-
-    [Test]
     public async Task EmailAddress_ReturnsEmpty_WhenCreatedEmpty()
     {
         // Arrange
@@ -323,5 +302,220 @@ public class BasicUsageTests
 
         // Assert
         await Assert.That(json).IsEquivalentTo(expected);
+    }
+
+    [Test]
+    public async Task SystemTextJson_DeserializesCorrectly()
+    {
+        // Arrange
+        var expectedValue = "systemtext_user";
+        var json = $"\"{expectedValue}\"";
+
+        // Act
+        var result = System.Text.Json.JsonSerializer.Deserialize<Username>(json);
+
+        // Assert
+        await Assert.That(result.Value).IsEquivalentTo(expectedValue.ToLower());
+    }
+
+    [Test]
+    public async Task SystemTextJson_DeserializesNullCorrectly()
+    {
+        // Arrange
+        var json = "null";
+
+        // Act
+        var result = System.Text.Json.JsonSerializer.Deserialize<Username>(json);
+
+        // Assert
+        await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task NewtonsoftJson_DeserializesCorrectly()
+    {
+        // Arrange
+        var expectedValue = "newtonsoft_user";
+        var json = $"\"{expectedValue}\"";
+
+        // Act
+        var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Username>(json);
+
+        // Assert
+        await Assert.That(result.Value).IsEquivalentTo(expectedValue.ToLower());
+    }
+
+    [Test]
+    public async Task NewtonsoftJson_DeserializesNullCorrectly()
+    {
+        // Arrange
+        var json = "null";
+
+        // Act
+        var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Username>(json);
+
+        // Assert
+        await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task LiteDB_DeserializesNullCorrectly()
+    {
+        // Arrange
+        var mapper = new LiteDB.BsonMapper();
+        var bsonValue = LiteDB.BsonValue.Null;
+
+        // Act
+        var result = mapper.Deserialize<Username>(bsonValue);
+
+        // Assert
+        await Assert.That(result).IsNull();
+    }
+
+    [Test]
+    public async Task AllSerializers_HandleSpecialCharactersCorrectly()
+    {
+        // Arrange
+        var testValue = "user@domain.com";
+        var systemJson = $"\"{testValue}\"";
+        var newtonsoftJson = $"\"{testValue}\"";
+        var mapper = new LiteDB.BsonMapper();
+        var bsonValue = mapper.Serialize(testValue);
+
+        // Act & Assert (should throw due to validation)
+        await Assert.That(() => System.Text.Json.JsonSerializer.Deserialize<Username>(systemJson))
+            .ThrowsException();
+
+        await Assert.That(() => Newtonsoft.Json.JsonConvert.DeserializeObject<Username>(newtonsoftJson))
+            .ThrowsException();
+
+        await Assert.That(() => mapper.Deserialize<Username>(bsonValue))
+            .ThrowsException();
+    }
+
+    [Test]
+    public async Task LiteDB_DeserializesCorrectly()
+    {
+        // Arrange
+        var expectedValue = "litedb_user";
+        var mapper = BsonMapper.Global;//new LiteDB.BsonMapper();
+        var bsonValue = mapper.Serialize(expectedValue);
+        Console.WriteLine(bsonValue.ToString()); // "litedb_user"
+
+
+        // Act
+        var result = mapper.Deserialize<Username>(bsonValue);
+
+        // Assert
+        await Assert.That(result.Value).IsEquivalentTo(expectedValue.ToLower());
+    }
+
+    [Test]
+    public async Task AllSerializers_HandleGuidTypeCorrectly()
+    {
+        // This test assumes you have a Guid wrapper type like:
+        // [Primify<Guid>] public partial record class ItemId { }
+
+        // Arrange
+        var guid = Guid.NewGuid();
+        var guidString = guid.ToString();
+
+        // System.Text.Json
+        var systemJson = $"\"{guidString}\"";
+        var systemResult = System.Text.Json.JsonSerializer.Deserialize<ItemId>(systemJson);
+        await Assert.That((Guid)systemResult.Value).IsEqualTo(guid);
+
+        // Newtonsoft.Json
+        var newtonResult = Newtonsoft.Json.JsonConvert.DeserializeObject<ItemId>($"\"{guidString}\"");
+        await Assert.That((Guid)newtonResult.Value).IsEqualTo(guid);
+
+        // LiteDB
+        var mapper = new LiteDB.BsonMapper();
+        var bsonValue = new LiteDB.BsonValue(guid);
+        var liteResult = mapper.Deserialize<Guid>(bsonValue);
+        await Assert.That(liteResult).IsEqualTo(guid);
+    }
+
+    [Test]
+    public async Task BsonMapper_Handles()
+    {
+        // Will work automatically
+        var id = ItemId.From(Guid.NewGuid());
+        var username = Username.From("test");
+        var entity = new MyEntity
+        {
+            Id = id,
+            Name = username
+        };
+        using var db = new LiteDatabase(":memory:");
+        var col = db.GetCollection<MyEntity>();
+        col.Insert(entity);
+
+        var retrieved = col.FindOne(o => o.Id == id);
+
+        // No registration needed!
+        var doc = new BsonDocument
+        {
+            ["id"] = id,
+            ["username"] = username
+        };
+
+        // And deserialization works too:
+        var deserializedId = (ItemId)doc["id"]; // Uses implicit conversion
+        var deserializedUsername = (Username)doc["username"]; // Uses implicit conversion
+
+        // Assert
+        await Assert.That(retrieved).IsEquivalentTo(entity);
+    }
+
+    [Test]
+    public async Task Order_PersistsToLiteDB_Correctly()
+    {
+        // Arrange
+        var id = OrderId.From(1001);
+        var customer = CustomerName.From("Alice Smith");
+        var quantity = Quantity.From(5);
+        var order = new Order
+        {
+            Id = id,
+            Customer = customer,
+            Quantity = quantity
+        };
+
+        // Act
+        using var db = new LiteDatabase(":memory:");
+        var col = db.GetCollection<Order>("orders");
+        col.Insert(order);
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(col.FindAll()));
+        var result = col.FindById(id.Value);
+        var retrieved = col.FindOne(o => o.Id == id.Value);
+
+        // Assert
+        await Assert.That(result).IsEquivalentTo(order);
+        await Assert.That(retrieved).IsEquivalentTo(order);
+    }
+
+    [Test]
+    public async Task LiteDB_DirectUsage_WorksCorrectly()
+    {
+        // Arrange
+        var expectedId = Guid.NewGuid();
+        var expectedUsername = "testuser";
+
+        // Act
+        var doc = new BsonDocument {
+            ["id"] = ItemId.From(expectedId),
+            ["username"] = Username.From(expectedUsername)
+        };
+
+        // Assert
+        await Assert.That((Guid)((ItemId)doc["id"]).Value).IsEqualTo(expectedId);
+        await Assert.That(((Username)doc["username"]).Value).IsEqualTo(expectedUsername.ToLower());
+    }
+
+    record MyEntity
+    {
+        public ItemId Id { get; set; }
+        public Username Name { get; set; }
     }
 }
