@@ -118,7 +118,6 @@ BsonMapper.Global.RegisterType<UserId>(
 ```
 
 ## Benchmarks
-### Run on a MacBook Air M1
 ```csharp
 // * Summary *
 
