@@ -1,105 +1,148 @@
 # Primify
 
-A lightweight source generator for .NET that transforms decorated record classes or readonly record structs into custom value types with built-in JSON serialization support. Primify simplifies creating strongly-typed wrappers around primitive types, with seamless integration for `System.Text.Json`, `Newtonsoft.Json`, and `LiteDB`.
+[![NuGet Version](https://img.shields.io/github/v/release/koddek/Primify?include_prereleases&label=NuGet)](https://github.com/koddek/Primify/packages)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+## CURRENTLY THIS IS JUST A TOY PROJECT TO SEE IF I CAN DO IT
+
+**Primify** is a Roslyn source generator that creates type-safe wrappers for primitive values with built-in serialization support for:
+- System.Text.Json
+- Newtonsoft.Json
+- LiteDB
 
 ## Features
-- **Source Generation**: Generates boilerplate for value wrappers.
-- **JSON Serialization**: Supports `System.Text.Json` and `Newtonsoft.Json`.
-- **LiteDB Integration**: Registers BSON mappers for database compatibility.
-- **Validation & Normalization**: Customizable via partial methods.
-- **Implicit Conversions**: Convert to/from the primitive type effortlessly.
-- **Targeting .NET 9**: Built for the latest .NET version.
+
+✅ Strongly-typed wrappers for primitives  
+✅ Automatic serialization support  
+✅ Custom validation & normalization  
+✅ Predefined value support  
+✅ Zero runtime dependencies  
 
 ## Installation
-Install via NuGet:
+
+Add the NuGet package from GitHub Packages:
 
 ```bash
-dotnet add package Primify
+dotnet add package Primify --version 1.1.1 <--- NOT YET LIVE
 ```
 
-## Getting Started
-1. Define a value type using `PrimifyAttribute<T>`:
+## Usage
+
+### 1. Define Your Wrapper
+
 ```csharp
-using Primify.Attributes;
-
-// Record class wrapper
-[PrimifyAttribute<int>]
-public sealed partial record class OrderId;
-
-// Readonly record struct wrapper
-[PrimifyAttribute<string>]
-public readonly partial record struct CustomerName;
-```
-
-2. Use it in your code:
-```csharp
-using Primify.Attributes;
-using Newtonsoft.Json;
-using LiteDB;
-using JsonSerializer = System.Text.Json.JsonSerializer;
-
-// Create instances
-var order = new Order
+[Primify<string>]
+public partial record class Username
 {
-    Id = OrderId.From(1001),
-    Customer = CustomerName.From("Alice Smith")
-};
+    [PredefinedValue("")]
+    public static partial Username Empty { get; }
 
-// Serialize with System.Text.Json
-string json1 = JsonSerializer.Serialize(order);
-Console.WriteLine(json1); // {"Id":1001,"Customer":"Alice Smith"}
+    [PredefinedValue("guest")] 
+    public static partial Username Guest { get; }
 
-// Serialize with Newtonsoft.Json
-string json2 = JsonConvert.SerializeObject(order);
-Console.WriteLine(json2); // {"Id":1001,"Customer":"Alice Smith"}
-
-// Store in LiteDB
-using var db = new LiteDatabase(":memory:");
-var col = db.GetCollection<Order>("orders");
-col.Insert(order);
-var retrieved = col.FindOne(o => o.Id == OrderId.From(1001));
-Console.WriteLine(retrieved.Customer); // "Alice Smith"
-
-// Implicit conversions
-int idValue = order.Id; // 1001 (to primitive)
-OrderId newId = 2002;   // From primitive
-
-public sealed class Order
-{
-    // Use [BsonId] attribute if your id is not named "Id"
-    public OrderId Id { get; set; }
-    public CustomerName Customer { get; set; }
-}
-```
-
-## Advanced Usage
-Customize validation and normalization:
-```csharp
-[PrimifyAttribute<int>]
-public sealed partial record class Quantity
-{
-    // Validate the value
-    static partial void Validate(in int value)
+    // Custom validation
+    static partial void Validate(string value)
     {
-        if (value <= 0)
-            throw new ArgumentException("Quantity must be positive.");
+        if (value.Length > 20)
+            throw new ArgumentException("Username too long");
     }
 
-    // Normalize the value
-    private static partial int Normalize(int value) => Math.Max(1, value); // Ensure at least 1
+    // Automatic normalization
+    private static partial string Normalize(string value) 
+        => value.Trim().ToLowerInvariant();
 }
-
-var qty = Quantity.From(0); // Throws due to validation
-var normalizedQty = Quantity.From(-5); // Becomes 1 due to normalization
 ```
 
-## Notes
-- **Implicit Conversions**: Use `OrderId id = 123` or `int value = id` directly.
-- **Supported Primitives**: Works with `int`, `string`, `Guid`, and other primitive types.
-- **Requirements**: .NET 9.0+, C# 9.0+ (for records).
+### 2. Use Like Regular Values
+
+```csharp
+// Implicit conversion
+Username user = "alice123";
+
+// Explicit conversion
+string raw = (string)user;
+
+// Predefined values
+if (user == Username.Guest)
+{
+    // ...
+}
+```
+
+### 3. Serialization Just Works
+
+```csharp
+// System.Text.Json
+var json = JsonSerializer.Serialize(user); // "alice123"
+var back = JsonSerializer.Deserialize<Username>(json);
+
+// Newtonsoft.Json
+var newtonJson = JsonConvert.SerializeObject(user);
+
+// LiteDB (automatic registration)
+using var db = new LiteDatabase(":memory:");
+var col = db.GetCollection<User>();
+col.Insert(new User { Username = user });
+```
+
+## Supported Types
+
+Primify works with:
+- All .NET primitives (`int`, `string`, `bool`, etc.)
+- `Guid`
+- `DateTime`
+- `TimeSpan`
+- `DateTimeOffset`
+- `DateOnly`
+- `TimeOnly`
+
+## Advanced Features
+
+### Custom JSON Converters
+
+```csharp
+[Primify<int>]
+[JsonConverter(typeof(CustomConverter))] // Add your own
+public partial record class UserId { }
+```
+
+### LiteDB Custom Mapping
+
+```csharp
+// Auto-registered by default
+// Manually register if needed:
+BsonMapper.Global.RegisterType<UserId>(
+    v => v.Value,
+    bson => UserId.From(bson.AsInt32)
+);
+```
+
+## Benchmarks
+### Run on a MacBook Air M1
+```csharp
+// * Summary *
+
+BenchmarkDotNet v0.14.0, macOS Sequoia 15.3.2 (24D81) [Darwin 24.3.0]
+Apple M1, 1 CPU, 8 logical and 8 physical cores
+.NET SDK 9.0.103
+  [Host]     : .NET 9.0.2 (9.0.225.6610), Arm64 RyuJIT AdvSIMD
+  DefaultJob : .NET 9.0.2 (9.0.225.6610), Arm64 RyuJIT AdvSIMD
+
+// This wrapper was used
+[Primify<string>]
+public readonly partial record struct Username;
+```
+| Method              | Mean     | Error   | StdDev   | Median   | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
+|-------------------- |---------:|--------:|---------:|---------:|------:|--------:|-------:|----------:|------------:|
+| Serialize_Raw       | 178.6 ns | 3.40 ns |  3.34 ns | 178.8 ns |  1.00 |    0.03 | 0.0076 |      48 B |        1.00 |
+| Serialize_Wrapper   | 247.6 ns | 4.70 ns |  3.93 ns | 247.0 ns |  1.39 |    0.03 | 0.0076 |      48 B |        1.00 |
+| Deserialize_Raw     | 101.9 ns | 0.87 ns |  0.72 ns | 101.6 ns |  0.57 |    0.01 | 0.0076 |      48 B |        1.00 |
+| Deserialize_Wrapper | 305.5 ns | 8.11 ns | 22.35 ns | 295.5 ns |  1.71 |    0.13 | 0.0076 |      48 B |        1.00 |
+
 
 ## Contributing
-Contributions are welcome! Submit a pull request or open an issue on [GitHub](https://github.com/dapwell/Primify).
+
+Pull requests welcome! For major changes, please open an issue first.
 
 ## License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
