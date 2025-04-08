@@ -13,15 +13,15 @@ namespace Primify.Tests;
 public class BasicUsageTests
 {
     [Test]
-    public async Task OrderId_CreationAndImplicitConversion_Works()
+    public async Task OrderId_CreationAndExplicitConversion_Works()
     {
         // Arrange
         int expectedValue = 1001;
         var orderId = OrderId.From(expectedValue);
 
         // Act
-        int actualValue = (int)orderId; // Implicit conversion to int
-        OrderId fromPrimitive = expectedValue; // Implicit conversion from int
+        int actualValue = (int)orderId; // Explicit conversion to int
+        OrderId fromPrimitive = (OrderId)expectedValue; // Explicit conversion from int
 
         // Assert
         await Assert.That(actualValue).IsEqualTo(expectedValue);
@@ -29,7 +29,7 @@ public class BasicUsageTests
     }
 
     [Test]
-    public async Task CustomerName_CreationAndImplicitConversion_Works()
+    public async Task CustomerName_CreationAndExplicitConversion_Works()
     {
         // Arrange
         string expectedValue = "Alice Smith";
@@ -37,7 +37,7 @@ public class BasicUsageTests
 
         // Act
         string actualValue = (string)customerName; // Explicit conversion to string
-        CustomerName fromPrimitive = expectedValue; // Implicit conversion from string
+        CustomerName fromPrimitive = (CustomerName)expectedValue; // Explicit conversion from string
 
         // Assert
         await Assert.That(actualValue).IsEqualTo(expectedValue);
@@ -201,20 +201,20 @@ public class BasicUsageTests
     }
 
     [Test]
-    public async Task ImplicitConversion_WorksCorrectly()
+    public async Task ExplicitConversionToWrapper_WorksCorrectly()
     {
         // Arrange
-        var testValue = "implicitUser";
+        var testValue = "explicitUser";
 
         // Act
-        Username username = testValue; // Uses implicit conversion
+        Username username = (Username)testValue;
 
         // Assert
         await Assert.That(username.Value).IsEquivalentTo(testValue.ToLower());
     }
 
     [Test]
-    public async Task ExplicitConversion_WorksCorrectly()
+    public async Task ExplicitConversionToPrimitive_WorksCorrectly()
     {
         // Arrange
         var username = Username.From("explicitUser");
@@ -488,7 +488,7 @@ public class BasicUsageTests
         col.Insert(order);
         Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(col.FindAll()));
         var result = col.FindById(id.Value);
-        var retrieved = col.FindOne(o => o.Id == id.Value);
+        var retrieved = col.FindOne(o => o.Id == id);
 
         // Assert
         await Assert.That(result).IsEquivalentTo(order);

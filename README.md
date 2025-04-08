@@ -56,10 +56,10 @@ public partial record class Username
 ### 2. Use Like Regular Values
 
 ```csharp
-// Implicit conversion
-Username user = "alice123";
+// Explicit conversion to wrapper
+Username user = (Username)"alice123";
 
-// Explicit conversion
+// Explicit conversion to raw
 string raw = (string)user;
 
 // Predefined values

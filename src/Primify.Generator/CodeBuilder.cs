@@ -87,9 +87,9 @@ internal static class CodeBuilder
             $"{indent1}public static explicit operator {info.PrimitiveTypeName}({info.TypeName} self) => self.Value;");
         sb.AppendLine();
         sb.AppendLine(
-            $"{indent1}/// <summary>Implicitly converts a primitive value to the wrapper type.</summary>");
+            $"{indent1}/// <summary>Explicitly converts a primitive value to the wrapper type.</summary>");
         sb.AppendLine(
-            $"{indent1}public static implicit operator {info.TypeName}({info.PrimitiveTypeName} value) => From(value);");
+            $"{indent1}public static explicit operator {info.TypeName}({info.PrimitiveTypeName} value) => From(value);");
         sb.AppendLine();
 
         // Add these methods to each generated wrapper class
