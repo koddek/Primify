@@ -77,7 +77,8 @@ var json = JsonSerializer.Serialize(user); // "alice123"
 var back = JsonSerializer.Deserialize<Username>(json);
 
 // Newtonsoft.Json
-var newtonJson = JsonConvert.SerializeObject(user);
+var newtonJson = JsonConvert.SerializeObject(user); // "alice123"
+var backNewton = JsonConvert.DeserializeObject<Username>(newtonJson);
 
 // LiteDB (automatic registration)
 using var db = new LiteDatabase(":memory:");
