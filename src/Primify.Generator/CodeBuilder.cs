@@ -78,9 +78,8 @@ internal static class CodeBuilder
         sb.AppendLine();
     }
 
-    public static void AppendImplicitConvertersImplementation(WrapperTypeInfo info, StringBuilder sb, string indent1)
+    public static void AppendImplicitExplicitConvertersImplementation(WrapperTypeInfo info, StringBuilder sb, string indent1)
     {
-        // --- Implicit Conversions ---
         sb.AppendLine(
             $"{indent1}/// <summary>Explicitly converts the wrapper to its primitive value.</summary>");
         sb.AppendLine(
@@ -93,10 +92,18 @@ internal static class CodeBuilder
         sb.AppendLine();
 
         // Add these methods to each generated wrapper class
-        sb.AppendLine($"{indent1}// LiteDB serialization support");
-        sb.AppendLine($"{indent1}public static implicit operator BsonValue({info.TypeName} value) => value.Value;");
-        sb.AppendLine(
-            $"{indent1}public static implicit operator {info.TypeName}(BsonValue bson) => From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)});");
+        if (info.PrimitiveTypeName.Contains("DateOnly"))
+        {
+            sb.AppendLine($"{indent1}// LiteDB serialization support");
+            sb.AppendLine($"{indent1}public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value.DayNumber);");
+            sb.AppendLine($"{indent1}public static implicit operator {info.TypeName}(BsonValue bson) => From(DateOnly.FromDayNumber(bson.AsInt32));");
+        }
+        else
+        {
+            sb.AppendLine($"{indent1}// LiteDB serialization support");
+            sb.AppendLine($"{indent1}public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value);");
+            sb.AppendLine($"{indent1}public static implicit operator {info.TypeName}(BsonValue bson) => From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)});");
+        }
     }
 
     public static void AppendJsonConverterAttributesPointingToConverters(WrapperTypeInfo info, StringBuilder sb,
@@ -277,11 +284,18 @@ internal static class CodeBuilder
         foreach (var info in types)
         {
             sb.AppendLine($"                mapper.RegisterType<{info.FullTypeName}>(");
-            sb.AppendLine($"                    serialize: value => value.Value,");
-            sb.AppendLine(
-                $"                    deserialize: bson => {info.FullTypeName}.From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)}));");
+            // Handle DateOnly specially
+            if (info.PrimitiveTypeName.Contains("DateOnly"))
+            {
+                sb.AppendLine($"                    serialize: value => new BsonValue(value.Value.DayNumber),");
+                sb.AppendLine($"                    deserialize: bson => {info.FullTypeName}.From(DateOnly.FromDayNumber(bson.AsInt32)));");
+            }
+            else
+            {
+                sb.AppendLine($"                    serialize: value => new BsonValue(value.Value),");
+                sb.AppendLine($"                    deserialize: bson => {info.FullTypeName}.From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)}));");
+            }
         }
-
         sb.AppendLine();
         sb.AppendLine("                if (mapper == BsonMapper.Global) _initialized = true;");
         sb.AppendLine("            }");
@@ -304,7 +318,7 @@ internal static class CodeBuilder
             case "System.DateTime": return "AsDateTime";
             case "System.DateTimeOffset": return "AsDateTime"; // Store as DateTime
             case "System.TimeSpan": return "AsInt64"; // Store as ticks
-            case "System.DateOnly": return "AsDateTime"; // Store as DateTime with 00:00:00 time
+            case "System.DateOnly": return "AsInt32"; // Store as day number
             case "System.TimeOnly": return "AsInt64"; // Store as ticks since midnight
         }
 
@@ -442,7 +456,7 @@ internal static class CodeBuilder
     {
         // Add LiteDB registration as a nested class
         sb.AppendLine($"{nestedIndent}/// <summary>Provides LiteDB serialization support.</summary>");
-        sb.AppendLine($"{nestedIndent}internal class LiteDbMapper : LiteDB.BsonMapper");
+        sb.AppendLine($"{nestedIndent}internal static class LiteDbMapper");
         sb.AppendLine($"{nestedIndent}{{");
         sb.AppendLine($"{doubleNestedIndent}static LiteDbMapper()");
         sb.AppendLine($"{doubleNestedIndent}{{");
@@ -453,9 +467,19 @@ internal static class CodeBuilder
         sb.AppendLine($"{doubleNestedIndent}public static void RegisterType()");
         sb.AppendLine($"{doubleNestedIndent}{{");
         sb.AppendLine($"{doubleNestedIndent}    LiteDB.BsonMapper.Global.RegisterType<{info.TypeName}>(");
-        sb.AppendLine($"{doubleNestedIndent}        serialize: value => value.Value,");
-        sb.AppendLine(
-            $"{doubleNestedIndent}        deserialize: bson => {info.TypeName}.From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)})");
+
+        // Special handling for DateOnly
+        if (info.PrimitiveTypeName.Contains("DateOnly"))
+        {
+            sb.AppendLine($"{doubleNestedIndent}        serialize: value => new BsonValue(value.Value.DayNumber),");
+            sb.AppendLine($"{doubleNestedIndent}        deserialize: bson => {info.TypeName}.From(System.DateOnly.FromDayNumber(bson.AsInt32))");
+        }
+        else
+        {
+            sb.AppendLine($"{doubleNestedIndent}        serialize: value => new BsonValue(value.Value),");
+            sb.AppendLine($"{doubleNestedIndent}        deserialize: bson => {info.TypeName}.From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)})");
+        }
+
         sb.AppendLine($"{doubleNestedIndent}    );");
         sb.AppendLine($"{doubleNestedIndent}}}");
         sb.AppendLine($"{nestedIndent}}}");

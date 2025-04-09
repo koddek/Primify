@@ -620,7 +620,7 @@ namespace Primify.Generator
             sb.AppendLine();
 
             CodeBuilder.AppendFactoryMethodImplementation(info, sb, nestedIndent, doubleNestedIndent);
-            CodeBuilder.AppendImplicitConvertersImplementation(info, sb, nestedIndent);
+            CodeBuilder.AppendImplicitExplicitConvertersImplementation(info, sb, nestedIndent);
             CodeBuilder.AppendNormalizeMethodImplementation(info, sb, nestedIndent);
             CodeBuilder.AppendValidateMethodImplementation(info, sb, nestedIndent);
             CodeBuilder.AppendToStringImplementation(info, sb, nestedIndent);
