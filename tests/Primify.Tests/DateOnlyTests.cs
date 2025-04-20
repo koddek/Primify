@@ -1,9 +1,7 @@
 using System;
 using System.Text.Json;
-using System.Threading.Tasks;
 using LiteDB;
 using Newtonsoft.Json;
-using Primify.Tests.Models;
 using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Primify.Tests;

@@ -1,9 +1,7 @@
 using System;
 using Newtonsoft.Json;
 using System.Text.Json;
-using System.Threading.Tasks;
 using LiteDB;
-using Primify.Tests.Models;
 using TUnit;
 using TUnit.Assertions.AssertConditions.Throws;
 using JsonSerializer = LiteDB.JsonSerializer;

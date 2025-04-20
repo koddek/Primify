@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
-using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Text;
@@ -25,71 +24,6 @@ namespace Primify.Generator
     [Generator]
     public class ValueWrapperGenerator : IIncrementalGenerator
     {
-        // --- Diagnostic Descriptors ---
-        private static readonly DiagnosticDescriptor ErrorAttributeNotFound = new(
-            id: "VWG001",
-            title: "Attribute Not Found",
-            messageFormat: "Could not find the required attribute '{0}' in the compilation",
-            category: "ValueWrapperGenerator",
-            defaultSeverity: DiagnosticSeverity.Error,
-            isEnabledByDefault: true);
-
-        private static readonly DiagnosticDescriptor ErrorNotPartial = new(
-            id: "VWG002",
-            title: "Not Partial",
-            messageFormat: "The type '{0}' decorated with '{1}' must be declared with the 'partial' keyword",
-            category: "ValueWrapperGenerator",
-            defaultSeverity: DiagnosticSeverity.Error,
-            isEnabledByDefault: true);
-
-        private static readonly DiagnosticDescriptor ErrorNotRecordClassOrStruct = new(
-            id: "VWG003",
-            title: "Not Record Class or Record Struct",
-            messageFormat: "The type '{0}' decorated with '{1}' must be a record class or readonly record struct",
-            category: "ValueWrapperGenerator",
-            defaultSeverity: DiagnosticSeverity.Error,
-            isEnabledByDefault: true);
-
-        private static readonly DiagnosticDescriptor ErrorNotReadonlyStruct = new(
-            id: "VWG004",
-            title: "Not Readonly Struct",
-            messageFormat: "The struct type '{0}' decorated with '{1}' must be declared with the 'readonly' modifier",
-            category: "ValueWrapperGenerator",
-            defaultSeverity: DiagnosticSeverity.Error,
-            isEnabledByDefault: true);
-
-        private static readonly DiagnosticDescriptor ErrorInvalidAttributeUsage = new(
-            id: "VWG005",
-            title: "Invalid Attribute Usage",
-            messageFormat: "{0} on type '{1}' has invalid type arguments or configuration: {2}",
-            category: "ValueWrapperGenerator",
-            defaultSeverity: DiagnosticSeverity.Error,
-            isEnabledByDefault: true);
-
-        private static readonly DiagnosticDescriptor InfoGeneratedCode = new(
-            id: "VWG006",
-            title: "Generated Code",
-            messageFormat: "Generated implementation for value wrapper type '{0}'",
-            category: "ValueWrapperGenerator",
-            defaultSeverity: DiagnosticSeverity.Info,
-            isEnabledByDefault: true);
-
-        private static readonly DiagnosticDescriptor InfoPartialMethodAvailable = new(
-            id: "VWG007",
-            title: "Partial Method Available",
-            messageFormat: "Partial method '{0}' can be implemented to add custom {1} logic for '{2}'",
-            category: "ValueWrapperGenerator",
-            defaultSeverity: DiagnosticSeverity.Info,
-            isEnabledByDefault: true);
-
-        private static readonly DiagnosticDescriptor ErrorPredefinedFieldRequirements = new(
-            id: "VWG008",
-            title: "Invalid Predefined Field",
-            messageFormat: "Field '{0}' decorated with PredefinedValueAttribute must be static, readonly, and private",
-            category: "ValueWrapperGenerator",
-            defaultSeverity: DiagnosticSeverity.Error,
-            isEnabledByDefault: true);
-
         // --- Attribute Name ---
         private const string AttributeFullName = "Primify.Attributes.PrimifyAttribute`1";
 
@@ -155,7 +89,11 @@ namespace Primify.Generator
             var attributeSymbol = compilation.GetTypeByMetadataName(AttributeFullName);
             if (attributeSymbol == null)
             {
-                context.ReportDiagnostic(Diagnostic.Create(ErrorAttributeNotFound, Location.None, AttributeFullName));
+                context.ReportDiagnostic(Diagnostic.Create(
+                    ValueWrapperDiagnostics.ErrorAttributeNotFound,
+                    Location.None,
+                    AttributeFullName
+                ));
                 return;
             }
 
@@ -187,9 +125,13 @@ namespace Primify.Generator
 
                 if (attrData.AttributeClass?.TypeArguments.Length != 1)
                 {
-                    context.ReportDiagnostic(Diagnostic.Create(ErrorInvalidAttributeUsage,
-                        typeDeclSyntax.Identifier.GetLocation(), attributeSymbol.Name, typeSymbol.Name,
-                        "Requires exactly one type argument (the primitive type)"));
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        ValueWrapperDiagnostics.ErrorInvalidAttributeUsage,
+                        typeDeclSyntax.Identifier.GetLocation(),
+                        attributeSymbol.Name,
+                        typeSymbol.Name,
+                        "Requires exactly one type argument (the primitive type)"
+                    ));
                     continue;
                 }
 
@@ -223,9 +165,13 @@ namespace Primify.Generator
 
                 if (!isPrimitiveOrSupportedType)
                 {
-                    context.ReportDiagnostic(Diagnostic.Create(ErrorInvalidAttributeUsage,
-                        typeDeclSyntax.Identifier.GetLocation(), attributeSymbol.Name, typeSymbol.Name,
-                        $"The primitive type '{primitiveTypeSymbol.ToDisplayString()}' is not a supported primitive or system type"));
+                    context.ReportDiagnostic(Diagnostic.Create(
+                        ValueWrapperDiagnostics.ErrorInvalidAttributeUsage,
+                        typeDeclSyntax.Identifier.GetLocation(),
+                        attributeSymbol.Name,
+                        typeSymbol.Name,
+                        $"The primitive type '{primitiveTypeSymbol.ToDisplayString()}' is not a supported primitive or system type"
+                    ));
                     continue;
                 }
 
@@ -338,15 +284,10 @@ namespace Primify.Generator
                     if (!isPartialProperty)
                     {
                         context.ReportDiagnostic(Diagnostic.Create(
-                            new DiagnosticDescriptor(
-                                "VWG009",
-                                "Invalid Predefined Property",
-                                "Property '{0}' decorated with PredefinedValueAttribute must be declared with the 'partial' keyword",
-                                "ValueWrapperGenerator",
-                                DiagnosticSeverity.Error,
-                                isEnabledByDefault: true),
+                            ValueWrapperDiagnostics.ErrorPredefinedPropertyNotPartial,
                             propertySymbol.Locations.FirstOrDefault(),
-                            propertySymbol.Name));
+                            propertySymbol.Name
+                        ));
                         continue;
                     }
 
@@ -381,11 +322,12 @@ namespace Primify.Generator
                         else
                         {
                             context.ReportDiagnostic(Diagnostic.Create(
-                                ErrorInvalidAttributeUsage,
+                                ValueWrapperDiagnostics.ErrorInvalidAttributeUsage,
                                 propertySymbol.Locations.FirstOrDefault(),
                                 "PredefinedValueAttribute",
                                 typeSymbol.Name,
-                                $"Value type '{(valueTypeSymbol?.ToDisplayString() ?? value?.GetType().Name ?? "unknown")}' for property '{propertySymbol.Name}' does not match or cannot be converted to the primitive type '{primitiveTypeSymbol.ToDisplayString()}'"));
+                                $"Value type '{(valueTypeSymbol?.ToDisplayString() ?? value?.GetType().Name ?? "unknown")}' for property '{propertySymbol.Name}' does not match or cannot be converted to the primitive type '{primitiveTypeSymbol.ToDisplayString()}'"
+                            ));
                         }
                     }
                 }
@@ -396,22 +338,20 @@ namespace Primify.Generator
             TypeDeclarationSyntax typeDecl
         )
         {
-            // Check if user has implemented the Normalize method
             if (!info.HasNormalizeImplementation)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
-                    InfoPartialMethodAvailable,
+                    ValueWrapperDiagnostics.InfoPartialMethodAvailable,
                     typeDecl.Identifier.GetLocation(),
                     "Normalize",
                     "normalization",
                     info.TypeName));
             }
 
-            // Check if user has implemented the Validate method
             if (!info.HasValidateImplementation)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
-                    InfoPartialMethodAvailable,
+                    ValueWrapperDiagnostics.InfoPartialMethodAvailable,
                     typeDecl.Identifier.GetLocation(),
                     "Validate",
                     "validation",
@@ -426,30 +366,46 @@ namespace Primify.Generator
             // Existing validation checks
             if (!typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
             {
-                context.ReportDiagnostic(Diagnostic.Create(ErrorNotPartial, typeDeclSyntax.Identifier.GetLocation(),
-                    typeSymbol.Name, attributeSymbol.Name));
+                context.ReportDiagnostic(Diagnostic.Create(
+                    ValueWrapperDiagnostics.ErrorNotPartial,
+                    typeDeclSyntax.Identifier.GetLocation(),
+                    typeSymbol.Name,
+                    attributeSymbol.Name
+                ));
                 return true;
             }
 
             if (!typeSymbol.IsRecord)
             {
-                context.ReportDiagnostic(Diagnostic.Create(ErrorNotRecordClassOrStruct,
-                    typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
+                context.ReportDiagnostic(Diagnostic.Create(
+                    ValueWrapperDiagnostics.ErrorNotRecordClassOrStruct,
+                    typeDeclSyntax.Identifier.GetLocation(),
+                    typeSymbol.Name,
+                    attributeSymbol.Name
+                ));
                 return true;
             }
 
             if (typeSymbol.IsValueType && !typeDeclSyntax.Modifiers.Any(m => m.IsKind(SyntaxKind.ReadOnlyKeyword)))
             {
-                context.ReportDiagnostic(Diagnostic.Create(ErrorNotReadonlyStruct,
-                    typeDeclSyntax.Identifier.GetLocation(), typeSymbol.Name, attributeSymbol.Name));
+                context.ReportDiagnostic(Diagnostic.Create(
+                    ValueWrapperDiagnostics.ErrorNotReadonlyStruct,
+                    typeDeclSyntax.Identifier.GetLocation(),
+                    typeSymbol.Name,
+                    attributeSymbol.Name
+                ));
                 return true;
             }
 
             if (primitiveTypeSymbol.NullableAnnotation == NullableAnnotation.Annotated)
             {
-                context.ReportDiagnostic(Diagnostic.Create(ErrorInvalidAttributeUsage,
-                    typeDeclSyntax.Identifier.GetLocation(), attributeSymbol.Name, typeSymbol.Name,
-                    $"The primitive type argument '{primitiveTypeSymbol.ToDisplayString()}' cannot be a nullable reference or value type"));
+                context.ReportDiagnostic(Diagnostic.Create(
+                    ValueWrapperDiagnostics.ErrorInvalidAttributeUsage,
+                    typeDeclSyntax.Identifier.GetLocation(),
+                    attributeSymbol.Name,
+                    typeSymbol.Name,
+                    $"The primitive type argument '{primitiveTypeSymbol.ToDisplayString()}' cannot be a nullable reference or value type"
+                ));
                 return true;
             }
 
@@ -535,9 +491,10 @@ namespace Primify.Generator
             foreach (var typeInfo in typesToProcess)
             {
                 context.ReportDiagnostic(Diagnostic.Create(
-                    InfoGeneratedCode,
+                    ValueWrapperDiagnostics.InfoGeneratedCode,
                     Location.None,
-                    typeInfo.FullTypeName));
+                    typeInfo.FullTypeName
+                ));
 
                 // Generate the main implementation
                 var generatedSource = GenerateImplementation(typeInfo, compilation);

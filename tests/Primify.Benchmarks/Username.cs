@@ -2,6 +2,9 @@ namespace Primify.Benchmarks;
 
 [Primify<string>]
 public readonly partial record struct Username;
+
+[Primify<string>]
+public partial record class Username2;
 /*{
     [PredefinedValue("")]
     public static partial Username Empty { get; }

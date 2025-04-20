@@ -1,6 +1,4 @@
 using System;
-using System.Threading.Tasks;
-using Primify.Tests.Models;
 using TUnit;
 using TUnit.Assertions.AssertConditions.Throws;
 
