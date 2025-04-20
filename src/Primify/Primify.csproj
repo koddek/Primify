@@ -2,7 +2,7 @@
     <PropertyGroup>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>Primify</PackageId>
-        <Version>1.2.2</Version>
+        <Version>1.2.3</Version>
         <Description>A library providing custom value types with JSON serialization through source generation.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson</PackageTags>
     </PropertyGroup>
