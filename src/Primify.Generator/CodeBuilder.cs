@@ -41,11 +41,11 @@ internal static class CodeBuilder
         sb.AppendLine($"{Indent}{signature}");
     }
 
-    public static void AppendBraces(StringBuilder sb, Action innerContent)
+    public static void AppendBraces(StringBuilder sb, Action innerContent, string indent)
     {
-        sb.AppendLine($"{Indent}{{");
+        sb.AppendLine($"{indent}{{");
         innerContent();
-        sb.AppendLine($"{Indent}}}");
+        sb.AppendLine($"{indent}}}");
     }
 
     public static void AppendNewLine(StringBuilder sb)
@@ -62,7 +62,7 @@ internal static class CodeBuilder
             sb.AppendLine($"{NestedIndent}var normalized = Normalize(value);");
             sb.AppendLine($"{NestedIndent}Validate(normalized);");
             sb.AppendLine($"{NestedIndent}return new {info.TypeName}(normalized);");
-        });
+        }, NestedIndent);
         AppendNewLine(sb);
     }
 
@@ -123,6 +123,8 @@ internal static class CodeBuilder
             AppendSummary(sb, $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to a <see cref=\"{info.TypeName}\"/> for LiteDB deserialization.");
             AppendMethodSignature(sb, $"public static implicit operator {info.TypeName}(BsonValue bson) => From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)});");
         }
+
+        AppendNewLine(sb);
     }
 
     public static void AppendJsonConverterAttributes(StringBuilder sb, string typeName)
@@ -154,11 +156,11 @@ internal static class CodeBuilder
                 {
                     // Return null for classes, default (which is default struct) for structs
                     sb.AppendLine($"{NestedIndent}        return {(info.IsValueType ? $"default({info.TypeName})" : "null")};");
-                });
+                }, NestedIndent);
                 sb.AppendLine($"{NestedIndent}    var primitiveValue = System.Text.Json.JsonSerializer.Deserialize<{info.PrimitiveTypeName}>(ref reader, options);");
                 sb.AppendLine($"{NestedIndent}    // Use factory method instead of constructor for validation");
                 sb.AppendLine($"{NestedIndent}    return {info.TypeName}.From(primitiveValue!);");
-            });
+            }, NestedIndent);
             AppendNewLine(sb);
             AppendMethodSignature(sb, $"public override void Write(System.Text.Json.Utf8JsonWriter writer, {info.TypeName} value, System.Text.Json.JsonSerializerOptions options)");
             AppendBraces(sb, () =>
@@ -171,13 +173,13 @@ internal static class CodeBuilder
                     {
                         sb.AppendLine($"{NestedIndent}        writer.WriteNullValue();");
                         sb.AppendLine($"{NestedIndent}        return;");
-                    });
+                    }, NestedIndent);
                 }
 
                 sb.AppendLine($"{NestedIndent}    // Use implicit conversion to get primitive");
                 sb.AppendLine($"{NestedIndent}    System.Text.Json.JsonSerializer.Serialize(writer, ({info.PrimitiveTypeName})value, options);");
-            });
-        });
+            }, NestedIndent);
+        }, Indent);
         AppendNewLine(sb);
     }
 
@@ -197,7 +199,7 @@ internal static class CodeBuilder
                     sb.AppendLine($"{NestedIndent}    // Structs cannot be null, so no null check needed");
                     sb.AppendLine($"{NestedIndent}    // Use implicit conversion to get primitive");
                     sb.AppendLine($"{NestedIndent}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
-                });
+                }, NestedIndent);
                 AppendNewLine(sb);
                 AppendMethodSignature(sb, $"public override {info.TypeName} ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName} existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
                 AppendBraces(sb, () =>
@@ -207,12 +209,12 @@ internal static class CodeBuilder
                     {
                         sb.AppendLine($"{NestedIndent}        // Return default value for struct");
                         sb.AppendLine($"{NestedIndent}        return default;");
-                    });
+                    }, NestedIndent);
                     sb.AppendLine($"{NestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
                     sb.AppendLine($"{NestedIndent}    // Use factory method for validation");
                     sb.AppendLine($"{NestedIndent}    return {info.TypeName}.From(primitiveValue!);");
-                });
-            });
+                }, NestedIndent);
+            }, Indent);
         }
         else
         {
@@ -228,10 +230,10 @@ internal static class CodeBuilder
                     {
                         sb.AppendLine($"{NestedIndent}        writer.WriteNull();");
                         sb.AppendLine($"{NestedIndent}        return;");
-                    });
+                    }, NestedIndent);
                     sb.AppendLine($"{NestedIndent}    // Use implicit conversion to get primitive");
                     sb.AppendLine($"{NestedIndent}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
-                });
+                }, NestedIndent);
                 AppendNewLine(sb);
                 AppendMethodSignature(sb, $"public override {info.TypeName}? ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName}? existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
                 AppendBraces(sb, () =>
@@ -240,12 +242,12 @@ internal static class CodeBuilder
                     AppendBraces(sb, () =>
                     {
                         sb.AppendLine($"{NestedIndent}        return null;");
-                    });
+                    }, NestedIndent);
                     sb.AppendLine($"{NestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
                     sb.AppendLine($"{NestedIndent}    // Use factory method for validation");
                     sb.AppendLine($"{NestedIndent}    return {info.TypeName}.From(primitiveValue!);");
-                });
-            });
+                }, NestedIndent);
+            }, Indent);
         }
         AppendNewLine(sb);
     }
