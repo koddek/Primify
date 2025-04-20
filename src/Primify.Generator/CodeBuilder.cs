@@ -110,13 +110,17 @@ internal static class CodeBuilder
         if (info.PrimitiveTypeName.Contains("DateOnly"))
         {
             sb.AppendLine($"{Indent}// LiteDB serialization support");
+            AppendSummary(sb, $"Implicitly converts an <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/>.");
             AppendMethodSignature(sb, $"public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value.DayNumber);");
+            AppendSummary(sb, $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to an <see cref=\"{info.TypeName}\"/>.");
             AppendMethodSignature(sb, $"public static implicit operator {info.TypeName}(BsonValue bson) => From(DateOnly.FromDayNumber(bson.AsInt32));");
         }
         else
         {
             sb.AppendLine($"{Indent}// LiteDB serialization support");
+            AppendSummary(sb, $"Implicitly converts an <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/>.");
             AppendMethodSignature(sb, $"public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value);");
+            AppendSummary(sb, $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to an <see cref=\"{info.TypeName}\"/>.");
             AppendMethodSignature(sb, $"public static implicit operator {info.TypeName}(BsonValue bson) => From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)});");
         }
     }
