@@ -356,26 +356,34 @@ internal static class CodeBuilder
         }
     }
 
+    public static void AppendTypeSummary(StringBuilder sb, string summary)
+    {
+        sb.AppendLine("/// <summary>");
+        sb.AppendLine($"/// {summary}");
+        sb.AppendLine("/// </summary>");
+    }
+
+    public static void EnsureBlankLine(StringBuilder sb)
+    {
+        if (sb.Length == 0) return;
+        var last = sb.ToString().TrimEnd('\n').Split('\n').LastOrDefault();
+        if (!string.IsNullOrWhiteSpace(last)) sb.AppendLine();
+    }
+
     public static void AppendPredefinedInstancesImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
         if (info.PredefinedInstances == null || info.PredefinedInstances.Count == 0)
             return;
-
-        sb.AppendLine($"{Indent}#region Predefined Instances");
+        sb.AppendLine("#region Predefined Instances");
         sb.AppendLine();
-
         sb.AppendLine("#pragma warning disable IDE1006");
-        // Generate the private static readonly fields
         foreach (var instance in info.PredefinedInstances)
         {
             var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
             sb.AppendLine($"{Indent}private static readonly {info.TypeName} {fieldName};");
         }
-
         sb.AppendLine("#pragma warning restore IDE1006");
         sb.AppendLine();
-
-        // Generate the static constructor to initialize the fields
         sb.AppendLine($"{Indent}static {info.TypeName}()");
         sb.AppendLine($"{Indent}{{");
         foreach (var instance in info.PredefinedInstances)
@@ -384,19 +392,15 @@ internal static class CodeBuilder
             var formattedValue = FormatValue(info.PrimitiveTypeSymbol, instance.Value);
             sb.AppendLine($"{NestedIndent}{fieldName} = new {info.TypeName}({formattedValue});");
         }
-
         sb.AppendLine();
-        sb.AppendLine($"{NestedIndent}    // Auto-register with LiteDB");
-        sb.AppendLine($"{NestedIndent}    LiteDbMapper.RegisterType();");
+        sb.AppendLine($"{NestedIndent}// Auto-register with LiteDB");
+        sb.AppendLine($"{NestedIndent}LiteDbMapper.RegisterType();");
         sb.AppendLine($"{Indent}}}");
         sb.AppendLine();
-
-        // Generate readonly properties for each predefined instance
         foreach (var instance in info.PredefinedInstances)
         {
             var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
             var propertyName = instance.PropertyName;
-
             sb.AppendLine($"{Indent}/// <summary>");
             sb.AppendLine($"{Indent}/// Gets the predefined {info.TypeName} instance for '{propertyName}'.");
             sb.AppendLine($"{Indent}/// </summary>");
@@ -406,8 +410,7 @@ internal static class CodeBuilder
             sb.AppendLine($"{Indent}public static partial {info.TypeName} {propertyName} => {fieldName};");
             sb.AppendLine();
         }
-
-        sb.AppendLine($"{Indent}#endregion");
+        sb.AppendLine("#endregion");
         sb.AppendLine();
     }
 
