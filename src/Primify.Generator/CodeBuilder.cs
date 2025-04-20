@@ -7,234 +7,243 @@ namespace Primify.Generator;
 
 internal static class CodeBuilder
 {
-    public static void AppendFactoryMethodImplementation(WrapperTypeInfo info, StringBuilder sb, string indent1,
-        string indent2
-    )
+    // --- Constants ---
+    public const string SummaryStart = "/// <summary>";
+    public const string SummaryEnd = "/// </summary>";
+    public const string ParamTag = "/// <param name=\"{0}\">{1}</param>";
+    public const string ReturnsTag = "/// <returns>{0}</returns>";
+
+    // --- Indentation Constants ---
+    public const string Indent = "    ";
+    public const string NestedIndent = Indent + Indent;
+    public const string DoubleNestedIndent = NestedIndent + Indent;
+
+    // --- Helper Methods ---
+    public static void AppendSummary(StringBuilder sb, string summary)
     {
-        // --- Factory Method ---
-        sb.AppendLine($"{indent1}/// <summary>Creates a new instance from a primitive value.</summary>");
-        sb.AppendLine($"{indent1}public static {info.TypeName} From({info.PrimitiveTypeName} value)");
-        sb.AppendLine($"{indent1}{{");
-        sb.AppendLine($"{indent2}var normalized = Normalize(value);");
-        sb.AppendLine($"{indent2}Validate(normalized);");
-        sb.AppendLine($"{indent2}return new {info.TypeName}(normalized);");
-        sb.AppendLine($"{indent1}}}");
+        sb.AppendLine($"{Indent}{SummaryStart}");
+        sb.AppendLine($"{Indent}/// {summary}");
+        sb.AppendLine($"{Indent}{SummaryEnd}");
+    }
+
+    public static void AppendParam(StringBuilder sb, string paramName, string description)
+    {
+        sb.AppendLine($"{Indent}{string.Format(ParamTag, paramName, description)}");
+    }
+
+    public static void AppendReturns(StringBuilder sb, string description)
+    {
+        sb.AppendLine($"{Indent}{string.Format(ReturnsTag, description)}");
+    }
+
+    public static void AppendMethodSignature(StringBuilder sb, string signature)
+    {
+        sb.AppendLine($"{Indent}{signature}");
+    }
+
+    public static void AppendBraces(StringBuilder sb, Action innerContent)
+    {
+        sb.AppendLine($"{Indent}{{");
+        innerContent();
+        sb.AppendLine($"{Indent}}}");
+    }
+
+    public static void AppendNewLine(StringBuilder sb)
+    {
         sb.AppendLine();
     }
 
-    public static void AppendValidateMethodImplementation(WrapperTypeInfo info, StringBuilder sb, in string indent1)
+    public static void AppendFactoryMethodImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
-        var summaryDocStart = $"{indent1}/// <summary>";
-        var summaryDocEnd = $"{indent1}/// </summary>";
-
-        // --- Partial Validate Implementation ---
-        sb.AppendLine(summaryDocStart);
-        sb.AppendLine(
-            $"{indent1}/// Provides a hook for validating the normalized primitive value before construction.");
-        sb.AppendLine($"{indent1}/// Implement this partial method in your own code file to apply custom validation.");
-        sb.AppendLine($"{indent1}/// Throw an exception (e.g., ArgumentException) if validation fails.");
-        sb.AppendLine(summaryDocEnd);
-        sb.AppendLine($"{indent1}/// <param name=\"value\">The normalized primitive value.</param>");
-
-        // Only declare the partial method signature, never provide an implementation here
-        // This way user can provide implementation in their code
-        sb.AppendLine($"{indent1}static partial void Validate({info.PrimitiveTypeName} value);");
-        sb.AppendLine();
+        AppendSummary(sb, "Creates a new instance from a primitive value.");
+        AppendMethodSignature(sb, $"public static {info.TypeName} From({info.PrimitiveTypeName} value)");
+        AppendBraces(sb, () =>
+        {
+            sb.AppendLine($"{NestedIndent}var normalized = Normalize(value);");
+            sb.AppendLine($"{NestedIndent}Validate(normalized);");
+            sb.AppendLine($"{NestedIndent}return new {info.TypeName}(normalized);");
+        });
+        AppendNewLine(sb);
     }
 
-    public static void AppendNormalizeMethodImplementation(WrapperTypeInfo info, StringBuilder sb, in string indent1)
+    public static void AppendValidateMethodImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
-        var summaryDocStart = $"{indent1}/// <summary>";
-        var summaryDocEnd = $"{indent1}/// </summary>";
-        var msg1 =
-            $"{indent1}/// Provides a hook for normalizing the primitive value before validation and construction.";
-        var msg2 =
-            $"{indent1}/// Implement this partial method in your own code file to apply custom normalization.";
-
-        // --- Partial Normalize Implementation ---
-        sb.AppendLine(summaryDocStart);
-        sb.AppendLine(msg1);
-        sb.AppendLine(msg2);
-        sb.AppendLine(summaryDocEnd);
-        sb.AppendLine($"{indent1}/// <param name=\"value\">The raw primitive value.</param>");
-        sb.AppendLine($"{indent1}/// <returns>The normalized primitive value.</returns>");
-
-        // If user has a partial implementation, just declare the partial method signature
-        sb.AppendLine(info.HasNormalizeImplementation
-            ? $"{indent1}private static partial {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value);"
-            // If no user implementation, provide the default (no-op) implementation without an access modifier
-            : $"{indent1}static {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value) => value;");
-        sb.AppendLine();
+        AppendSummary(sb, "Provides a hook for validating the normalized primitive value before construction.");
+        sb.AppendLine($"{Indent}/// Implement this partial method in your own code file to apply custom validation.");
+        sb.AppendLine($"{Indent}/// Throw an exception (e.g., ArgumentException) if validation fails.");
+        AppendParam(sb, "value", "The normalized primitive value.");
+        AppendMethodSignature(sb, $"static partial void Validate({info.PrimitiveTypeName} value);");
+        AppendNewLine(sb);
     }
 
-    public static void AppendToStringImplementation(WrapperTypeInfo info, StringBuilder sb, string indent)
+    public static void AppendNormalizeMethodImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
-        sb.AppendLine($"{indent}/// <summary>");
-        sb.AppendLine($"{indent}/// Returns a string representation of the value.");
-        sb.AppendLine($"{indent}/// </summary>");
-        sb.AppendLine($"{indent}/// <returns>String representation of the underlying value.</returns>");
-        sb.AppendLine($"{indent}public override string ToString() => Value.ToString();");
-        sb.AppendLine();
+        AppendSummary(sb, "Provides a hook for normalizing the primitive value before validation and construction.");
+        sb.AppendLine($"{Indent}/// Implement this partial method in your own code file to apply custom normalization.");
+        AppendParam(sb, "value", "The raw primitive value.");
+        AppendReturns(sb, "The normalized primitive value.");
+        if (info.HasNormalizeImplementation)
+            AppendMethodSignature(sb, $"private static partial {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value);");
+        else
+            AppendMethodSignature(sb, $"static {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value) => value;");
+        AppendNewLine(sb);
     }
 
-    public static void AppendImplicitExplicitConvertersImplementation(WrapperTypeInfo info, StringBuilder sb, string indent1)
+    public static void AppendToStringImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
-        sb.AppendLine(
-            $"{indent1}/// <summary>Explicitly converts the wrapper to its primitive value.</summary>");
-        sb.AppendLine(
-            $"{indent1}public static explicit operator {info.PrimitiveTypeName}({info.TypeName} self) => self.Value;");
-        sb.AppendLine();
-        sb.AppendLine(
-            $"{indent1}/// <summary>Explicitly converts a primitive value to the wrapper type.</summary>");
-        sb.AppendLine(
-            $"{indent1}public static explicit operator {info.TypeName}({info.PrimitiveTypeName} value) => From(value);");
-        sb.AppendLine();
+        AppendSummary(sb, "Returns a string representation of the value.");
+        AppendReturns(sb, "String representation of the underlying value.");
+        AppendMethodSignature(sb, "public override string ToString() => Value.ToString();");
+        AppendNewLine(sb);
+    }
+
+    public static void AppendImplicitExplicitConvertersImplementation(WrapperTypeInfo info, StringBuilder sb)
+    {
+        AppendSummary(sb, "Explicitly converts the wrapper to its primitive value.");
+        AppendMethodSignature(sb, $"public static explicit operator {info.PrimitiveTypeName}({info.TypeName} self) => self.Value;");
+        AppendNewLine(sb);
+        AppendSummary(sb, "Explicitly converts a primitive value to the wrapper type.");
+        AppendMethodSignature(sb, $"public static explicit operator {info.TypeName}({info.PrimitiveTypeName} value) => From(value);");
+        AppendNewLine(sb);
 
         // Add these methods to each generated wrapper class
         if (info.PrimitiveTypeName.Contains("DateOnly"))
         {
-            sb.AppendLine($"{indent1}// LiteDB serialization support");
-            sb.AppendLine($"{indent1}public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value.DayNumber);");
-            sb.AppendLine($"{indent1}public static implicit operator {info.TypeName}(BsonValue bson) => From(DateOnly.FromDayNumber(bson.AsInt32));");
+            sb.AppendLine($"{Indent}// LiteDB serialization support");
+            AppendMethodSignature(sb, $"public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value.DayNumber);");
+            AppendMethodSignature(sb, $"public static implicit operator {info.TypeName}(BsonValue bson) => From(DateOnly.FromDayNumber(bson.AsInt32));");
         }
         else
         {
-            sb.AppendLine($"{indent1}// LiteDB serialization support");
-            sb.AppendLine($"{indent1}public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value);");
-            sb.AppendLine($"{indent1}public static implicit operator {info.TypeName}(BsonValue bson) => From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)});");
+            sb.AppendLine($"{Indent}// LiteDB serialization support");
+            AppendMethodSignature(sb, $"public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value);");
+            AppendMethodSignature(sb, $"public static implicit operator {info.TypeName}(BsonValue bson) => From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)});");
         }
     }
 
-    public static void AppendJsonConverterAttributesPointingToConverters(WrapperTypeInfo info, StringBuilder sb,
-        string indent
-    )
+    public static void AppendJsonConverterAttributes(StringBuilder sb, string typeName)
     {
-        // Apply JsonConverter attributes pointing to nested converters
-        sb.AppendLine($"{indent}/// <summary>");
-        sb.AppendLine($"{indent}/// Represents a value wrapper for <see cref=\"{info.PrimitiveTypeName}\"/>.");
-        sb.AppendLine($"{indent}/// Generated by ValueWrapperGenerator.");
-        sb.AppendLine($"{indent}/// </summary>");
-        sb.AppendLine($"{indent}[JsonConverter(typeof({info.TypeName}.{info.SystemTextConverterName}))]");
-        sb.AppendLine(
-            $"{indent}[NewtonsoftJson.JsonConverter(typeof({info.TypeName}.{info.NewtonsoftConverterName}))]");
+        sb.AppendLine($"[JsonConverter(typeof({typeName}.SystemTextJsonConverter))]");
+        sb.AppendLine($"[NewtonsoftJson.JsonConverter(typeof({typeName}.NewtonsoftJsonConverter))]");
     }
 
-    public static void AppendSystemTextJsonConverterImplementation(WrapperTypeInfo info, StringBuilder sb,
-        string indent1, string indent2
-    )
+    public static void AppendJsonConverterAttributesPointingToConverters(WrapperTypeInfo info, StringBuilder sb)
+    {
+        AppendSummary(sb, $"Represents a value wrapper for <see cref=\"{info.PrimitiveTypeName}\"/>.");
+        sb.AppendLine($"{Indent}/// Generated by ValueWrapperGenerator.");
+    }
+
+    public static void AppendSystemTextJsonConverterImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
         // --- System.Text.Json Converter ---
-        sb.AppendLine($"{indent1}/// <summary>Internal System.Text.Json converter.</summary>");
-        sb.AppendLine(
-            $"{indent1}internal class {info.SystemTextConverterName} : JsonConverter<{info.TypeName}>");
-        sb.AppendLine($"{indent1}{{");
-        // Return type is non-nullable for structs, nullable for classes
-        var readReturnType = info.IsValueType ? info.TypeName : $"{info.TypeName}?";
-        sb.AppendLine(
-            $"{indent2}public override {readReturnType} Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)");
-        sb.AppendLine($"{indent2}{{");
-        sb.AppendLine($"{indent2}    if (reader.TokenType == System.Text.Json.JsonTokenType.Null)");
-        sb.AppendLine($"{indent2}    {{");
-        // Return null for classes, default (which is default struct) for structs
-        sb.AppendLine(
-            $"{indent2}        return {(info.IsValueType ? $"default({info.TypeName})" : "null")};");
-        sb.AppendLine($"{indent2}    }}");
-        sb.AppendLine(
-            $"{indent2}    var primitiveValue = System.Text.Json.JsonSerializer.Deserialize<{info.PrimitiveTypeName}>(ref reader, options);");
-        sb.AppendLine($"{indent2}    // Use factory method instead of constructor for validation");
-        sb.AppendLine($"{indent2}    return {info.TypeName}.From(primitiveValue!);");
-        sb.AppendLine($"{indent2}}}");
-        sb.AppendLine();
-        sb.AppendLine(
-            $"{indent2}public override void Write(System.Text.Json.Utf8JsonWriter writer, {info.TypeName} value, System.Text.Json.JsonSerializerOptions options)");
-        sb.AppendLine($"{indent2}{{");
-        // Handle null classes passed to Write (structs cannot be null here)
-        if (!info.IsValueType)
+        AppendSummary(sb, "Internal System.Text.Json converter.");
+        AppendMethodSignature(sb, $"internal class {info.SystemTextConverterName} : JsonConverter<{info.TypeName}>");
+        AppendBraces(sb, () =>
         {
-            sb.AppendLine($"{indent2}    if (value is null)");
-            sb.AppendLine($"{indent2}    {{");
-            sb.AppendLine($"{indent2}        writer.WriteNullValue();");
-            sb.AppendLine($"{indent2}        return;");
-            sb.AppendLine($"{indent2}    }}");
-        }
+            // Return type is non-nullable for structs, nullable for classes
+            var readReturnType = info.IsValueType ? info.TypeName : $"{info.TypeName}?";
+            AppendMethodSignature(sb, $"public override {readReturnType} Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)");
+            AppendBraces(sb, () =>
+            {
+                sb.AppendLine($"{NestedIndent}    if (reader.TokenType == System.Text.Json.JsonTokenType.Null)");
+                AppendBraces(sb, () =>
+                {
+                    // Return null for classes, default (which is default struct) for structs
+                    sb.AppendLine($"{NestedIndent}        return {(info.IsValueType ? $"default({info.TypeName})" : "null")};");
+                });
+                sb.AppendLine($"{NestedIndent}    var primitiveValue = System.Text.Json.JsonSerializer.Deserialize<{info.PrimitiveTypeName}>(ref reader, options);");
+                sb.AppendLine($"{NestedIndent}    // Use factory method instead of constructor for validation");
+                sb.AppendLine($"{NestedIndent}    return {info.TypeName}.From(primitiveValue!);");
+            });
+            AppendNewLine(sb);
+            AppendMethodSignature(sb, $"public override void Write(System.Text.Json.Utf8JsonWriter writer, {info.TypeName} value, System.Text.Json.JsonSerializerOptions options)");
+            AppendBraces(sb, () =>
+            {
+                // Handle null classes passed to Write (structs cannot be null here)
+                if (!info.IsValueType)
+                {
+                    sb.AppendLine($"{NestedIndent}    if (value is null)");
+                    AppendBraces(sb, () =>
+                    {
+                        sb.AppendLine($"{NestedIndent}        writer.WriteNullValue();");
+                        sb.AppendLine($"{NestedIndent}        return;");
+                    });
+                }
 
-        sb.AppendLine($"{indent2}    // Use implicit conversion to get primitive");
-        sb.AppendLine(
-            $"{indent2}    System.Text.Json.JsonSerializer.Serialize(writer, ({info.PrimitiveTypeName})value, options);");
-        sb.AppendLine($"{indent2}}}");
-        sb.AppendLine($"{indent1}}}"); // Close SystemTextJsonConverter
-        sb.AppendLine();
+                sb.AppendLine($"{NestedIndent}    // Use implicit conversion to get primitive");
+                sb.AppendLine($"{NestedIndent}    System.Text.Json.JsonSerializer.Serialize(writer, ({info.PrimitiveTypeName})value, options);");
+            });
+        });
+        AppendNewLine(sb);
     }
 
-    public static void AppendNewtonsoftJsonConverterImplementation(WrapperTypeInfo info, StringBuilder sb,
-        string indent1, string indent2
-    )
+    public static void AppendNewtonsoftJsonConverterImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
         // --- Newtonsoft.Json Converter ---
-        sb.AppendLine($"{indent1}/// <summary>Internal Newtonsoft.Json converter.</summary>");
+        AppendSummary(sb, "Internal Newtonsoft.Json converter.");
         if (info.IsValueType)
         {
             // Struct implementation - No nullable parameter types
-            sb.AppendLine(
-                $"{indent1}internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
-            sb.AppendLine($"{indent1}{{");
-            sb.AppendLine(
-                $"{indent2}public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName} value, NewtonsoftJson.JsonSerializer serializer)");
-            sb.AppendLine($"{indent2}{{");
-            sb.AppendLine($"{indent2}    // Structs cannot be null, so no null check needed");
-            sb.AppendLine($"{indent2}    // Use implicit conversion to get primitive");
-            sb.AppendLine(
-                $"{indent2}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
-            sb.AppendLine($"{indent2}}}");
-            sb.AppendLine();
-            sb.AppendLine(
-                $"{indent2}public override {info.TypeName} ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName} existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
-            sb.AppendLine($"{indent2}{{");
-            sb.AppendLine($"{indent2}    if (reader.TokenType == NewtonsoftJson.JsonToken.Null)");
-            sb.AppendLine($"{indent2}    {{");
-            sb.AppendLine($"{indent2}        // Return default value for struct");
-            sb.AppendLine($"{indent2}        return default;");
-            sb.AppendLine($"{indent2}    }}");
-            sb.AppendLine(
-                $"{indent2}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
-            sb.AppendLine($"{indent2}    // Use factory method for validation");
-            sb.AppendLine($"{indent2}    return {info.TypeName}.From(primitiveValue!);");
-            sb.AppendLine($"{indent2}}}");
+            AppendMethodSignature(sb, $"internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
+            AppendBraces(sb, () =>
+            {
+                AppendMethodSignature(sb, $"public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName} value, NewtonsoftJson.JsonSerializer serializer)");
+                AppendBraces(sb, () =>
+                {
+                    sb.AppendLine($"{NestedIndent}    // Structs cannot be null, so no null check needed");
+                    sb.AppendLine($"{NestedIndent}    // Use implicit conversion to get primitive");
+                    sb.AppendLine($"{NestedIndent}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
+                });
+                AppendNewLine(sb);
+                AppendMethodSignature(sb, $"public override {info.TypeName} ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName} existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
+                AppendBraces(sb, () =>
+                {
+                    sb.AppendLine($"{NestedIndent}    if (reader.TokenType == NewtonsoftJson.JsonToken.Null)");
+                    AppendBraces(sb, () =>
+                    {
+                        sb.AppendLine($"{NestedIndent}        // Return default value for struct");
+                        sb.AppendLine($"{NestedIndent}        return default;");
+                    });
+                    sb.AppendLine($"{NestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
+                    sb.AppendLine($"{NestedIndent}    // Use factory method for validation");
+                    sb.AppendLine($"{NestedIndent}    return {info.TypeName}.From(primitiveValue!);");
+                });
+            });
         }
         else
         {
             // Class implementation - With nullable parameter types
-            sb.AppendLine(
-                $"{indent1}internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
-            sb.AppendLine($"{indent1}{{");
-            sb.AppendLine(
-                $"{indent2}public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName}? value, NewtonsoftJson.JsonSerializer serializer)");
-            sb.AppendLine($"{indent2}{{");
-            sb.AppendLine($"{indent2}    if (value is null)");
-            sb.AppendLine($"{indent2}    {{");
-            sb.AppendLine($"{indent2}        writer.WriteNull();");
-            sb.AppendLine($"{indent2}        return;");
-            sb.AppendLine($"{indent2}    }}");
-            sb.AppendLine($"{indent2}    // Use implicit conversion to get primitive");
-            sb.AppendLine(
-                $"{indent2}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
-            sb.AppendLine($"{indent2}}}");
-            sb.AppendLine();
-            sb.AppendLine(
-                $"{indent2}public override {info.TypeName}? ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName}? existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
-            sb.AppendLine($"{indent2}{{");
-            sb.AppendLine($"{indent2}    if (reader.TokenType == NewtonsoftJson.JsonToken.Null)");
-            sb.AppendLine($"{indent2}    {{");
-            sb.AppendLine($"{indent2}        return null;");
-            sb.AppendLine($"{indent2}    }}");
-            sb.AppendLine(
-                $"{indent2}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
-            sb.AppendLine($"{indent2}    // Use factory method for validation");
-            sb.AppendLine($"{indent2}    return {info.TypeName}.From(primitiveValue!);");
-            sb.AppendLine($"{indent2}}}");
+            AppendMethodSignature(sb, $"internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
+            AppendBraces(sb, () =>
+            {
+                AppendMethodSignature(sb, $"public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName}? value, NewtonsoftJson.JsonSerializer serializer)");
+                AppendBraces(sb, () =>
+                {
+                    sb.AppendLine($"{NestedIndent}    if (value is null)");
+                    AppendBraces(sb, () =>
+                    {
+                        sb.AppendLine($"{NestedIndent}        writer.WriteNull();");
+                        sb.AppendLine($"{NestedIndent}        return;");
+                    });
+                    sb.AppendLine($"{NestedIndent}    // Use implicit conversion to get primitive");
+                    sb.AppendLine($"{NestedIndent}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
+                });
+                AppendNewLine(sb);
+                AppendMethodSignature(sb, $"public override {info.TypeName}? ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName}? existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
+                AppendBraces(sb, () =>
+                {
+                    sb.AppendLine($"{NestedIndent}    if (reader.TokenType == NewtonsoftJson.JsonToken.Null)");
+                    AppendBraces(sb, () =>
+                    {
+                        sb.AppendLine($"{NestedIndent}        return null;");
+                    });
+                    sb.AppendLine($"{NestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
+                    sb.AppendLine($"{NestedIndent}    // Use factory method for validation");
+                    sb.AppendLine($"{NestedIndent}    return {info.TypeName}.From(primitiveValue!);");
+                });
+            });
         }
-
-        sb.AppendLine($"{indent1}}}"); // Close NewtonsoftJsonConverter
+        AppendNewLine(sb);
     }
 
     // Generates the central registration class ONLY for BSON mapping
@@ -347,12 +356,12 @@ internal static class CodeBuilder
         }
     }
 
-    public static void AppendPredefinedInstancesImplementation(WrapperTypeInfo info, StringBuilder sb, string indent)
+    public static void AppendPredefinedInstancesImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
         if (info.PredefinedInstances == null || info.PredefinedInstances.Count == 0)
             return;
 
-        sb.AppendLine($"{indent}#region Predefined Instances");
+        sb.AppendLine($"{Indent}#region Predefined Instances");
         sb.AppendLine();
 
         sb.AppendLine("#pragma warning disable IDE1006");
@@ -360,26 +369,26 @@ internal static class CodeBuilder
         foreach (var instance in info.PredefinedInstances)
         {
             var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
-            sb.AppendLine($"{indent}private static readonly {info.TypeName} {fieldName};");
+            sb.AppendLine($"{Indent}private static readonly {info.TypeName} {fieldName};");
         }
 
         sb.AppendLine("#pragma warning restore IDE1006");
         sb.AppendLine();
 
         // Generate the static constructor to initialize the fields
-        sb.AppendLine($"{indent}static {info.TypeName}()");
-        sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{Indent}static {info.TypeName}()");
+        sb.AppendLine($"{Indent}{{");
         foreach (var instance in info.PredefinedInstances)
         {
             var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
             var formattedValue = FormatValue(info.PrimitiveTypeSymbol, instance.Value);
-            sb.AppendLine($"{indent}    {fieldName} = new {info.TypeName}({formattedValue});");
+            sb.AppendLine($"{NestedIndent}{fieldName} = new {info.TypeName}({formattedValue});");
         }
 
         sb.AppendLine();
-        sb.AppendLine($"{indent}    // Auto-register with LiteDB");
-        sb.AppendLine($"{indent}    LiteDbMapper.RegisterType();");
-        sb.AppendLine($"{indent}}}");
+        sb.AppendLine($"{NestedIndent}    // Auto-register with LiteDB");
+        sb.AppendLine($"{NestedIndent}    LiteDbMapper.RegisterType();");
+        sb.AppendLine($"{Indent}}}");
         sb.AppendLine();
 
         // Generate readonly properties for each predefined instance
@@ -388,17 +397,64 @@ internal static class CodeBuilder
             var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
             var propertyName = instance.PropertyName;
 
-            sb.AppendLine($"{indent}/// <summary>");
-            sb.AppendLine($"{indent}/// Gets the predefined {info.TypeName} instance for '{propertyName}'.");
-            sb.AppendLine($"{indent}/// </summary>");
-            sb.AppendLine($"{indent}[System.Text.Json.Serialization.JsonIgnore]");
-            sb.AppendLine($"{indent}[NewtonsoftJson.JsonIgnore]");
-            sb.AppendLine($"{indent}[LiteDB.BsonIgnore]");
-            sb.AppendLine($"{indent}public static partial {info.TypeName} {propertyName} => {fieldName};");
+            sb.AppendLine($"{Indent}/// <summary>");
+            sb.AppendLine($"{Indent}/// Gets the predefined {info.TypeName} instance for '{propertyName}'.");
+            sb.AppendLine($"{Indent}/// </summary>");
+            sb.AppendLine($"{Indent}[System.Text.Json.Serialization.JsonIgnore]");
+            sb.AppendLine($"{Indent}[NewtonsoftJson.JsonIgnore]");
+            sb.AppendLine($"{Indent}[LiteDB.BsonIgnore]");
+            sb.AppendLine($"{Indent}public static partial {info.TypeName} {propertyName} => {fieldName};");
             sb.AppendLine();
         }
 
-        sb.AppendLine($"{indent}#endregion");
+        sb.AppendLine($"{Indent}#endregion");
+        sb.AppendLine();
+    }
+
+    public static void AppendLiteDbRegistration(WrapperTypeInfo info, StringBuilder sb)
+    {
+        // Add LiteDB registration as a nested class
+        sb.AppendLine($"{NestedIndent}/// <summary>Provides LiteDB serialization support.</summary>");
+        sb.AppendLine($"{NestedIndent}internal static class LiteDbMapper");
+        sb.AppendLine($"{NestedIndent}{{");
+        sb.AppendLine($"{DoubleNestedIndent}static LiteDbMapper()");
+        sb.AppendLine($"{DoubleNestedIndent}{{");
+        sb.AppendLine($"{DoubleNestedIndent}    // Auto-register this type when the mapper is first used");
+        sb.AppendLine($"{DoubleNestedIndent}    RegisterType();");
+        sb.AppendLine($"{DoubleNestedIndent}}}");
+        sb.AppendLine();
+        sb.AppendLine($"{DoubleNestedIndent}public static void RegisterType()");
+        sb.AppendLine($"{DoubleNestedIndent}{{");
+        sb.AppendLine($"{DoubleNestedIndent}    LiteDB.BsonMapper.Global.RegisterType<{info.TypeName}>(");
+
+        // Special handling for DateOnly
+        if (info.PrimitiveTypeName.Contains("DateOnly"))
+        {
+            sb.AppendLine($"{DoubleNestedIndent}        serialize: value => new BsonValue(value.Value.DayNumber),");
+            sb.AppendLine($"{DoubleNestedIndent}        deserialize: bson => {info.TypeName}.From(System.DateOnly.FromDayNumber(bson.AsInt32))");
+        }
+        else
+        {
+            sb.AppendLine($"{DoubleNestedIndent}        serialize: value => new BsonValue(value.Value),");
+            sb.AppendLine($"{DoubleNestedIndent}        deserialize: bson => {info.TypeName}.From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)})");
+        }
+
+        sb.AppendLine($"{DoubleNestedIndent}    );");
+        sb.AppendLine($"{DoubleNestedIndent}}}");
+        sb.AppendLine($"{NestedIndent}}}");
+    }
+
+    public static void AppendValuePropertyAndConstructor(WrapperTypeInfo info, StringBuilder sb)
+    {
+        // Property
+        sb.AppendLine($"{Indent}/// <summary>Gets the underlying primitive value.</summary>");
+        sb.AppendLine($"{Indent}public {info.PrimitiveTypeName} Value {{ get; }}");
+        sb.AppendLine();
+        // Private constructor
+        sb.AppendLine($"{Indent}private {info.TypeName}({info.PrimitiveTypeName} value)");
+        sb.AppendLine($"{Indent}{{");
+        sb.AppendLine($"{NestedIndent}Value = value;");
+        sb.AppendLine($"{Indent}}}");
         sb.AppendLine();
     }
 
@@ -449,38 +505,57 @@ internal static class CodeBuilder
         };
     }
 
-    public static void AppendLiteDbRegistration(WrapperTypeInfo info, StringBuilder sb, string nestedIndent,
-        string doubleNestedIndent
-    )
+    // Helper to append the auto-generated header
+    public static void AppendAutoGeneratedHeader(StringBuilder sb)
     {
-        // Add LiteDB registration as a nested class
-        sb.AppendLine($"{nestedIndent}/// <summary>Provides LiteDB serialization support.</summary>");
-        sb.AppendLine($"{nestedIndent}internal static class LiteDbMapper");
-        sb.AppendLine($"{nestedIndent}{{");
-        sb.AppendLine($"{doubleNestedIndent}static LiteDbMapper()");
-        sb.AppendLine($"{doubleNestedIndent}{{");
-        sb.AppendLine($"{doubleNestedIndent}    // Auto-register this type when the mapper is first used");
-        sb.AppendLine($"{doubleNestedIndent}    RegisterType();");
-        sb.AppendLine($"{doubleNestedIndent}}}");
-        sb.AppendLine();
-        sb.AppendLine($"{doubleNestedIndent}public static void RegisterType()");
-        sb.AppendLine($"{doubleNestedIndent}{{");
-        sb.AppendLine($"{doubleNestedIndent}    LiteDB.BsonMapper.Global.RegisterType<{info.TypeName}>(");
+        sb.AppendLine("// <auto-generated/>");
+    }
 
-        // Special handling for DateOnly
-        if (info.PrimitiveTypeName.Contains("DateOnly"))
-        {
-            sb.AppendLine($"{doubleNestedIndent}        serialize: value => new BsonValue(value.Value.DayNumber),");
-            sb.AppendLine($"{doubleNestedIndent}        deserialize: bson => {info.TypeName}.From(System.DateOnly.FromDayNumber(bson.AsInt32))");
-        }
-        else
-        {
-            sb.AppendLine($"{doubleNestedIndent}        serialize: value => new BsonValue(value.Value),");
-            sb.AppendLine($"{doubleNestedIndent}        deserialize: bson => {info.TypeName}.From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)})");
-        }
+    // Helper to append nullable enable directive
+    public static void AppendNullableEnable(StringBuilder sb)
+    {
+        sb.AppendLine("#nullable enable");
+    }
 
-        sb.AppendLine($"{doubleNestedIndent}    );");
-        sb.AppendLine($"{doubleNestedIndent}}}");
-        sb.AppendLine($"{nestedIndent}}}");
+    // Helper to append using statements
+    public static void AppendUsingStatements(StringBuilder sb, params string[] usings)
+    {
+        foreach (var u in usings)
+        {
+            sb.AppendLine($"using {u};");
+        }
+    }
+
+    public static void AppendUsingStatement(StringBuilder sb, string usingNamespace)
+    {
+        sb.AppendLine($"using {usingNamespace};");
+    }
+
+    // Helper for namespace
+    public static void AppendNamespace(StringBuilder sb, string ns)
+    {
+        sb.AppendLine($"namespace {ns}");
+        sb.AppendLine("{");
+    }
+
+    // Helper for type declaration
+    public static void AppendTypeDeclaration(StringBuilder sb, string typeKindKeyword, string typeName, string sealedModifier)
+    {
+        var typeDecl = typeKindKeyword.Contains("record")
+            ? $"{typeKindKeyword.Replace("record", "partial record")}" : $"partial {typeKindKeyword}";
+        sb.AppendLine($"{Indent}{sealedModifier}{typeDecl} {typeName}");
+        sb.AppendLine($"{Indent}{{");
+    }
+
+    // Helper to close type
+    public static void AppendCloseType(StringBuilder sb)
+    {
+        sb.AppendLine($"{Indent}}}");
+    }
+
+    // Helper to close namespace
+    public static void AppendCloseNamespace(StringBuilder sb)
+    {
+        sb.AppendLine("}");
     }
 }
