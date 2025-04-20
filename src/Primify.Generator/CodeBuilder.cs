@@ -82,10 +82,10 @@ internal static class CodeBuilder
         sb.AppendLine($"{Indent}/// Implement this partial method in your own code file to apply custom normalization.");
         AppendParam(sb, "value", "The raw primitive value.");
         AppendReturns(sb, "The normalized primitive value.");
-        if (info.HasNormalizeImplementation)
-            AppendMethodSignature(sb, $"private static partial {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value);");
-        else
-            AppendMethodSignature(sb, $"static {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value) => value;");
+        AppendMethodSignature(sb,
+            info.HasNormalizeImplementation
+                ? $"private static partial {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value);"
+                : $"static {info.PrimitiveTypeName} Normalize({info.PrimitiveTypeName} value) => value;");
         AppendNewLine(sb);
     }
 
@@ -110,17 +110,17 @@ internal static class CodeBuilder
         if (info.PrimitiveTypeName.Contains("DateOnly"))
         {
             sb.AppendLine($"{Indent}// LiteDB serialization support");
-            AppendSummary(sb, $"Implicitly converts an <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/>.");
+            AppendSummary(sb, $"Implicitly converts a <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/> for LiteDB serialization.");
             AppendMethodSignature(sb, $"public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value.DayNumber);");
-            AppendSummary(sb, $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to an <see cref=\"{info.TypeName}\"/>.");
+            AppendSummary(sb, $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to a <see cref=\"{info.TypeName}\"/> for LiteDB deserialization.");
             AppendMethodSignature(sb, $"public static implicit operator {info.TypeName}(BsonValue bson) => From(DateOnly.FromDayNumber(bson.AsInt32));");
         }
         else
         {
             sb.AppendLine($"{Indent}// LiteDB serialization support");
-            AppendSummary(sb, $"Implicitly converts an <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/>.");
+            AppendSummary(sb, $"Implicitly converts a <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/> for LiteDB serialization.");
             AppendMethodSignature(sb, $"public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value);");
-            AppendSummary(sb, $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to an <see cref=\"{info.TypeName}\"/>.");
+            AppendSummary(sb, $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to a <see cref=\"{info.TypeName}\"/> for LiteDB deserialization.");
             AppendMethodSignature(sb, $"public static implicit operator {info.TypeName}(BsonValue bson) => From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)});");
         }
     }
