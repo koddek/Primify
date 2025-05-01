@@ -120,6 +120,42 @@ public class DateOnlyTests
         await Assert.That(retrieved.Name).IsEqualTo("TestItem");
     }
 
+    [Test]
+    public async Task LiteDB_ReturnsCorrectItem_WhenAddAndRetrieveByQueryComplexItem()
+    {
+        Primify.Generated.PrimifyLiteDbRegistration.Register(BsonMapper.Global);
+        using var db = new LiteDatabase(":memory:");
+        var collection = db.GetCollection<ContainerClass>("items");
+
+        var item = new ContainerClass
+        {
+            Id = TodayId,
+            Name = "TestItem"
+        };
+
+        collection.Insert(item);
+
+        // Query by Name instead of Id
+        var retrieved = collection.Query()
+            .Where(x => x.Id == DayId.From(TodayId.Value))
+            .FirstOrDefault();
+
+        await Assert.That(retrieved).IsNotNull();
+        await Assert.That(retrieved.Id).IsEqualTo(TodayId);
+        await Assert.That(retrieved.Name).IsEqualTo("TestItem");
+    }
+
+    [Test]
+    public async Task CastVersusFrom_ReturnsSameValue_WhenCastAndFromResultsAreCompared()
+    {
+        var dateOnly = DateOnly.FromDateTime(DateTime.Now);
+        var dayIdCasted = (DayId)dateOnly;
+        var dayIdFrom = DayId.From(dateOnly);
+
+        await Assert.That(dayIdCasted.Value).IsEqualTo(dateOnly);
+        await Assert.That(dayIdFrom.Value).IsEqualTo(dateOnly);
+    }
+
     #endregion
 
     #region Complex Object Tests
