@@ -223,22 +223,16 @@ namespace Primify.Generator
                     HasNormalizeImplementation: hasNormalize,
                     HasValidateImplementation: hasValidate,
                     PredefinedInstances: predefinedInstances,
-                    UserDefinedProperties: userDefinedProperties
+                    UserDefinedProperties: userDefinedProperties,
+                    DeclarationSyntax: typeDeclSyntax // Store the syntax node
                 ));
             }
 
             // At the end of the method, add the analyzer for partial methods for each valid type
             foreach (var typeInfo in typesToProcess)
             {
-                var typeSyntax = types.FirstOrDefault(t =>
-                    compilation.GetSemanticModel(t.SyntaxTree)
-                        .GetDeclaredSymbol(t)?.ToDisplayString() == typeInfo.FullTypeName);
-
-                if (typeSyntax != null)
-                {
-                    // This should be calling the instance method
-                    ((ValueWrapperGenerator)null).AddPartialMethodAnalyzers(context, typeInfo, typeSyntax);
-                }
+                // Use the stored DeclarationSyntax directly
+                AddPartialMethodAnalyzers(context, typeInfo, typeInfo.DeclarationSyntax);
             }
         }
 
@@ -361,7 +355,8 @@ namespace Primify.Generator
             }
         }
 
-        private void AddPartialMethodAnalyzers(SourceProductionContext context, WrapperTypeInfo info,
+        // Make the method static as it does not use instance members
+        private static void AddPartialMethodAnalyzers(SourceProductionContext context, WrapperTypeInfo info,
             TypeDeclarationSyntax typeDecl
         )
         {
@@ -609,6 +604,7 @@ namespace Primify.Generator
         string NewtonsoftConverterName,
         bool HasNormalizeImplementation,
         bool HasValidateImplementation,
+        TypeDeclarationSyntax DeclarationSyntax, // Moved before optional parameters
         List<(string PropertyName, object Value)>? PredefinedInstances = null,
         HashSet<string> UserDefinedProperties = null
     );
