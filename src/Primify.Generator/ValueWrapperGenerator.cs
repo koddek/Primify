@@ -115,11 +115,9 @@ namespace Primify.Generator
                 if (semanticModel.GetDeclaredSymbol(typeDeclSyntax) is not INamedTypeSymbol typeSymbol) continue;
 
                 var attrData = typeSymbol.GetAttributes().FirstOrDefault(ad =>
-                    ad.AttributeClass != null && (
-                        ad.AttributeClass.Name.Contains("Primify") ||
-                        (ad.AttributeClass.OriginalDefinition != null &&
-                         SymbolEqualityComparer.Default.Equals(ad.AttributeClass.OriginalDefinition, attributeSymbol))
-                    ));
+                    ad.AttributeClass?.OriginalDefinition != null &&
+                    SymbolEqualityComparer.Default.Equals(ad.AttributeClass.OriginalDefinition, attributeSymbol)
+                );
 
                 if (attrData == null) continue;
 
