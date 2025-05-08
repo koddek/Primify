@@ -27,6 +27,17 @@ namespace Primify.Generator
         // --- Attribute Name ---
         private const string AttributeFullName = "Primify.Attributes.PrimifyAttribute`1";
 
+        private static readonly HashSet<string> SupportedFullyQualifiedTypeNames = new HashSet<string>
+        {
+            "global::System.Guid",
+            "global::System.DateTime",
+            "global::System.TimeSpan",
+            "global::System.DateTimeOffset",
+            "global::System.DateOnly",
+            "global::System.TimeOnly"
+            // Add other supported non-intrinsic types here if needed
+        };
+
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
             // Register syntax provider to collect TypeDeclarationSyntax nodes with attributes
@@ -145,20 +156,10 @@ namespace Primify.Generator
                 }
                 else
                 {
-                    // Check additional supported types by qualified name
+                    // Check additional supported types by qualified name using the HashSet
                     string fullQualifiedTypeName =
                         primitiveTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    isPrimitiveOrSupportedType = fullQualifiedTypeName switch
-                    {
-                        "global::System.Guid" => true,
-                        "global::System.DateTime" => true,
-                        "global::System.TimeSpan" => true,
-                        "global::System.DateTimeOffset" => true,
-                        "global::System.DateOnly" => true,
-                        "global::System.TimeOnly" => true,
-                        // Add other supported types here if needed
-                        _ => false
-                    };
+                    isPrimitiveOrSupportedType = SupportedFullyQualifiedTypeNames.Contains(fullQualifiedTypeName);
                 }
 
                 if (!isPrimitiveOrSupportedType)
