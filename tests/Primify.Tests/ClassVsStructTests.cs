@@ -1,9 +1,9 @@
 namespace Primify.Tests;
 
-[Primify.Attributes.Primify<string>]
+[Attributes.Primify<string>]
 public partial record class ClassItem;
 
-[Primify.Attributes.Primify<string>]
+[Attributes.Primify<string>]
 public readonly partial record struct StructItem;
 
 public class ClassVsStructTests

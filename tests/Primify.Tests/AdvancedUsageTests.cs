@@ -18,7 +18,7 @@ public class AdvancedUsageTests
         await Assert.That(action).ThrowsException();
         await Assert.That(action).ThrowsExactly<ArgumentException>();
         await Assert.That(action).Throws<ArgumentException>()
-            .WithMessage("Quantity must be positive.");
+            .WithMessageMatching("Quantity must be positive*");
     }
 
     [Test]

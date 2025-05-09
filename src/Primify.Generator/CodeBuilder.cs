@@ -79,7 +79,8 @@ internal static class CodeBuilder
     public static void AppendNormalizeMethodImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
         AppendSummary(sb, "Provides a hook for normalizing the primitive value before validation and construction.");
-        sb.AppendLine($"{Indent}/// Implement this partial method in your own code file to apply custom normalization.");
+        sb.AppendLine(
+            $"{Indent}/// Implement this partial method in your own code file to apply custom normalization.");
         AppendParam(sb, "value", "The raw primitive value.");
         AppendReturns(sb, "The normalized primitive value.");
         AppendMethodSignature(sb,
@@ -100,28 +101,43 @@ internal static class CodeBuilder
     public static void AppendImplicitExplicitConvertersImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
         AppendSummary(sb, "Explicitly converts the wrapper to its primitive value.");
-        AppendMethodSignature(sb, $"public static explicit operator {info.PrimitiveTypeName}({info.TypeName} self) => self.Value;");
+        AppendMethodSignature(sb,
+            $"public static explicit operator {info.PrimitiveTypeName}({info.TypeName} self) => self.Value;");
         AppendNewLine(sb);
         AppendSummary(sb, "Explicitly converts a primitive value to the wrapper type.");
-        AppendMethodSignature(sb, $"public static explicit operator {info.TypeName}({info.PrimitiveTypeName} value) => From(value);");
+        AppendMethodSignature(sb,
+            $"public static explicit operator {info.TypeName}({info.PrimitiveTypeName} value) => From(value);");
         AppendNewLine(sb);
 
         // Add these methods to each generated wrapper class
-        if (info.PrimitiveTypeName.Contains("DateOnly"))
+        // Special handling for DateOnly needed because it's stored as Int32 (DayNumber)
+        if (info.PrimitiveTypeName == "global::System.DateOnly") // Use fully qualified name
         {
             sb.AppendLine($"{Indent}// LiteDB serialization support");
-            AppendSummary(sb, $"Implicitly converts a <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/> for LiteDB serialization.");
-            AppendMethodSignature(sb, $"public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value.DayNumber);");
-            AppendSummary(sb, $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to a <see cref=\"{info.TypeName}\"/> for LiteDB deserialization.");
-            AppendMethodSignature(sb, $"public static implicit operator {info.TypeName}(BsonValue bson) => From(DateOnly.FromDayNumber(bson.AsInt32));");
+            AppendSummary(sb,
+                $"Implicitly converts a <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/> for LiteDB serialization.");
+            AppendMethodSignature(sb,
+                $"public static implicit operator LiteDB.BsonValue({info.TypeName} value) => new LiteDB.BsonValue(value.Value.DayNumber);");
+            AppendSummary(sb,
+                $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to a <see cref=\"{info.TypeName}\"/> for LiteDB deserialization.");
+            AppendMethodSignature(sb,
+                $"public static implicit operator {info.TypeName}(LiteDB.BsonValue bson) => From(global::System.DateOnly.FromDayNumber(bson.AsInt32));"); // Use fully qualified name
         }
         else
         {
             sb.AppendLine($"{Indent}// LiteDB serialization support");
-            AppendSummary(sb, $"Implicitly converts a <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/> for LiteDB serialization.");
-            AppendMethodSignature(sb, $"public static implicit operator BsonValue({info.TypeName} value) => new BsonValue(value.Value);");
-            AppendSummary(sb, $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to a <see cref=\"{info.TypeName}\"/> for LiteDB deserialization.");
-            AppendMethodSignature(sb, $"public static implicit operator {info.TypeName}(BsonValue bson) => From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)});");
+            AppendSummary(sb,
+                $"Implicitly converts a <see cref=\"{info.TypeName}\"/> to a <see cref=\"LiteDB.BsonValue\"/> for LiteDB serialization.");
+            AppendMethodSignature(sb,
+                $"public static implicit operator LiteDB.BsonValue({info.TypeName} value) => new LiteDB.BsonValue(value.Value);");
+            AppendSummary(sb,
+                $"Implicitly converts a <see cref=\"LiteDB.BsonValue\"/> to a <see cref=\"{info.TypeName}\"/> for LiteDB deserialization.");
+            // Use the helper to get the correct expression for converting BsonValue to the primitive type
+            var deserializationExpressionForOperator =
+                GetDeserializationExpression(info,
+                    "bson"); // Get the correct expression (e.g., Convert.ToDouble(bson.AsDecimal))
+            AppendMethodSignature(sb,
+                $"public static implicit operator {info.TypeName}(LiteDB.BsonValue bson) => From({deserializationExpressionForOperator});"); // Use the expression here
         }
 
         AppendNewLine(sb);
@@ -129,40 +145,41 @@ internal static class CodeBuilder
 
     public static void AppendJsonConverterAttributes(StringBuilder sb, string typeName)
     {
-        sb.AppendLine($"[JsonConverter(typeof({typeName}.SystemTextJsonConverter))]");
+        sb.AppendLine(
+            $"[System.Text.Json.Serialization.JsonConverter(typeof({typeName}.SystemTextJsonConverter))]"); // Fully qualify
         sb.AppendLine($"[NewtonsoftJson.JsonConverter(typeof({typeName}.NewtonsoftJsonConverter))]");
-    }
-
-    public static void AppendJsonConverterAttributesPointingToConverters(WrapperTypeInfo info, StringBuilder sb)
-    {
-        AppendSummary(sb, $"Represents a value wrapper for <see cref=\"{info.PrimitiveTypeName}\"/>.");
-        sb.AppendLine($"{Indent}/// Generated by ValueWrapperGenerator.");
     }
 
     public static void AppendSystemTextJsonConverterImplementation(WrapperTypeInfo info, StringBuilder sb)
     {
         // --- System.Text.Json Converter ---
         AppendSummary(sb, "Internal System.Text.Json converter.");
-        AppendMethodSignature(sb, $"internal class {info.SystemTextConverterName} : JsonConverter<{info.TypeName}>");
+        // Fully qualify JsonConverter base type
+        AppendMethodSignature(sb,
+            $"internal class {info.SystemTextConverterName} : System.Text.Json.Serialization.JsonConverter<{info.TypeName}>");
         AppendBraces(sb, () =>
         {
             // Return type is non-nullable for structs, nullable for classes
             var readReturnType = info.IsValueType ? info.TypeName : $"{info.TypeName}?";
-            AppendMethodSignature(sb, $"public override {readReturnType} Read(ref System.Text.Json.Utf8JsonReader reader, Type typeToConvert, System.Text.Json.JsonSerializerOptions options)");
+            AppendMethodSignature(sb,
+                $"public override {readReturnType} Read(ref System.Text.Json.Utf8JsonReader reader, global::System.Type typeToConvert, System.Text.Json.JsonSerializerOptions options)"); // Fully qualify Type
             AppendBraces(sb, () =>
             {
                 sb.AppendLine($"{NestedIndent}    if (reader.TokenType == System.Text.Json.JsonTokenType.Null)");
                 AppendBraces(sb, () =>
                 {
                     // Return null for classes, default (which is default struct) for structs
-                    sb.AppendLine($"{NestedIndent}        return {(info.IsValueType ? $"default({info.TypeName})" : "null")};");
+                    sb.AppendLine(
+                        $"{NestedIndent}        return {(info.IsValueType ? $"default({info.TypeName})" : "null")};");
                 }, NestedIndent);
-                sb.AppendLine($"{NestedIndent}    var primitiveValue = System.Text.Json.JsonSerializer.Deserialize<{info.PrimitiveTypeName}>(ref reader, options);");
+                sb.AppendLine(
+                    $"{NestedIndent}    var primitiveValue = System.Text.Json.JsonSerializer.Deserialize<{info.PrimitiveTypeName}>(ref reader, options);");
                 sb.AppendLine($"{NestedIndent}    // Use factory method instead of constructor for validation");
                 sb.AppendLine($"{NestedIndent}    return {info.TypeName}.From(primitiveValue!);");
             }, NestedIndent);
             AppendNewLine(sb);
-            AppendMethodSignature(sb, $"public override void Write(System.Text.Json.Utf8JsonWriter writer, {info.TypeName} value, System.Text.Json.JsonSerializerOptions options)");
+            AppendMethodSignature(sb,
+                $"public override void Write(System.Text.Json.Utf8JsonWriter writer, {info.TypeName} value, System.Text.Json.JsonSerializerOptions options)");
             AppendBraces(sb, () =>
             {
                 // Handle null classes passed to Write (structs cannot be null here)
@@ -176,8 +193,9 @@ internal static class CodeBuilder
                     }, NestedIndent);
                 }
 
-                sb.AppendLine($"{NestedIndent}    // Use implicit conversion to get primitive");
-                sb.AppendLine($"{NestedIndent}    System.Text.Json.JsonSerializer.Serialize(writer, ({info.PrimitiveTypeName})value, options);");
+                sb.AppendLine($"{NestedIndent}    // Use explicit conversion to get primitive");
+                sb.AppendLine(
+                    $"{NestedIndent}    System.Text.Json.JsonSerializer.Serialize(writer, ({info.PrimitiveTypeName})value, options);");
             }, NestedIndent);
         }, Indent);
         AppendNewLine(sb);
@@ -190,18 +208,21 @@ internal static class CodeBuilder
         if (info.IsValueType)
         {
             // Struct implementation - No nullable parameter types
-            AppendMethodSignature(sb, $"internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
+            AppendMethodSignature(sb,
+                $"internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
             AppendBraces(sb, () =>
             {
-                AppendMethodSignature(sb, $"public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName} value, NewtonsoftJson.JsonSerializer serializer)");
+                AppendMethodSignature(sb,
+                    $"public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName} value, NewtonsoftJson.JsonSerializer serializer)");
                 AppendBraces(sb, () =>
                 {
                     sb.AppendLine($"{NestedIndent}    // Structs cannot be null, so no null check needed");
-                    sb.AppendLine($"{NestedIndent}    // Use implicit conversion to get primitive");
+                    sb.AppendLine($"{NestedIndent}    // Use explicit conversion to get primitive");
                     sb.AppendLine($"{NestedIndent}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
                 }, NestedIndent);
                 AppendNewLine(sb);
-                AppendMethodSignature(sb, $"public override {info.TypeName} ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName} existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
+                AppendMethodSignature(sb,
+                    $"public override {info.TypeName} ReadJson(NewtonsoftJson.JsonReader reader, global::System.Type objectType, {info.TypeName} existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)"); // Fully qualify Type
                 AppendBraces(sb, () =>
                 {
                     sb.AppendLine($"{NestedIndent}    if (reader.TokenType == NewtonsoftJson.JsonToken.Null)");
@@ -210,7 +231,8 @@ internal static class CodeBuilder
                         sb.AppendLine($"{NestedIndent}        // Return default value for struct");
                         sb.AppendLine($"{NestedIndent}        return default;");
                     }, NestedIndent);
-                    sb.AppendLine($"{NestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
+                    sb.AppendLine(
+                        $"{NestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
                     sb.AppendLine($"{NestedIndent}    // Use factory method for validation");
                     sb.AppendLine($"{NestedIndent}    return {info.TypeName}.From(primitiveValue!);");
                 }, NestedIndent);
@@ -219,10 +241,12 @@ internal static class CodeBuilder
         else
         {
             // Class implementation - With nullable parameter types
-            AppendMethodSignature(sb, $"internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
+            AppendMethodSignature(sb,
+                $"internal class {info.NewtonsoftConverterName} : NewtonsoftJson.JsonConverter<{info.TypeName}>");
             AppendBraces(sb, () =>
             {
-                AppendMethodSignature(sb, $"public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName}? value, NewtonsoftJson.JsonSerializer serializer)");
+                AppendMethodSignature(sb,
+                    $"public override void WriteJson(NewtonsoftJson.JsonWriter writer, {info.TypeName}? value, NewtonsoftJson.JsonSerializer serializer)");
                 AppendBraces(sb, () =>
                 {
                     sb.AppendLine($"{NestedIndent}    if (value is null)");
@@ -231,24 +255,24 @@ internal static class CodeBuilder
                         sb.AppendLine($"{NestedIndent}        writer.WriteNull();");
                         sb.AppendLine($"{NestedIndent}        return;");
                     }, NestedIndent);
-                    sb.AppendLine($"{NestedIndent}    // Use implicit conversion to get primitive");
+                    sb.AppendLine($"{NestedIndent}    // Use explicit conversion to get primitive");
                     sb.AppendLine($"{NestedIndent}    serializer.Serialize(writer, ({info.PrimitiveTypeName})value);");
                 }, NestedIndent);
                 AppendNewLine(sb);
-                AppendMethodSignature(sb, $"public override {info.TypeName}? ReadJson(NewtonsoftJson.JsonReader reader, Type objectType, {info.TypeName}? existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)");
+                AppendMethodSignature(sb,
+                    $"public override {info.TypeName}? ReadJson(NewtonsoftJson.JsonReader reader, global::System.Type objectType, {info.TypeName}? existingValue, bool hasExistingValue, NewtonsoftJson.JsonSerializer serializer)"); // Fully qualify Type
                 AppendBraces(sb, () =>
                 {
                     sb.AppendLine($"{NestedIndent}    if (reader.TokenType == NewtonsoftJson.JsonToken.Null)");
-                    AppendBraces(sb, () =>
-                    {
-                        sb.AppendLine($"{NestedIndent}        return null;");
-                    }, NestedIndent);
-                    sb.AppendLine($"{NestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
+                    AppendBraces(sb, () => { sb.AppendLine($"{NestedIndent}        return null;"); }, NestedIndent);
+                    sb.AppendLine(
+                        $"{NestedIndent}    var primitiveValue = serializer.Deserialize<{info.PrimitiveTypeName}>(reader);");
                     sb.AppendLine($"{NestedIndent}    // Use factory method for validation");
                     sb.AppendLine($"{NestedIndent}    return {info.TypeName}.From(primitiveValue!);");
                 }, NestedIndent);
             }, Indent);
         }
+
         AppendNewLine(sb);
     }
 
@@ -264,9 +288,18 @@ internal static class CodeBuilder
         sb.AppendLine("using System.Runtime.CompilerServices;");
         sb.AppendLine();
 
+        // Add using statements for all unique namespaces
         foreach (var ns in types.Select(t => t.Namespace).Where(n => !string.IsNullOrEmpty(n)).Distinct())
         {
             sb.AppendLine($"using {ns};");
+        }
+
+        // Add global:: prefix for types in the global namespace if any exist
+        if (types.Any(t => string.IsNullOrEmpty(t.Namespace)))
+        {
+            // This might not be strictly necessary depending on how types are resolved,
+            // but can prevent ambiguity if types with the same name exist elsewhere.
+            // Consider if needed based on potential conflicts.
         }
 
         sb.AppendLine();
@@ -297,19 +330,27 @@ internal static class CodeBuilder
         sb.AppendLine();
         foreach (var info in types)
         {
+            // Use fully qualified type name for RegisterType<T>
             sb.AppendLine($"                mapper.RegisterType<{info.FullTypeName}>(");
             // Handle DateOnly specially
-            if (info.PrimitiveTypeName.Contains("DateOnly"))
+            if (info.PrimitiveTypeName == "global::System.DateOnly") // Use fully qualified name for check
             {
                 sb.AppendLine($"                    serialize: value => new BsonValue(value.Value.DayNumber),");
-                sb.AppendLine($"                    deserialize: bson => {info.FullTypeName}.From(DateOnly.FromDayNumber(bson.AsInt32)));");
+                // Use fully qualified name for From method call
+                sb.AppendLine(
+                    $"                    deserialize: bson => {info.FullTypeName}.From(global::System.DateOnly.FromDayNumber(bson.AsInt32)));");
             }
             else
             {
+                // Use the helper to get the correct expression for converting BsonValue to the primitive type
+                var deserializationExpressionForRegistration = GetDeserializationExpression(info, "bson");
+                // Use fully qualified name for From method call
                 sb.AppendLine($"                    serialize: value => new BsonValue(value.Value),");
-                sb.AppendLine($"                    deserialize: bson => {info.FullTypeName}.From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)}));");
+                sb.AppendLine(
+                    $"                    deserialize: bson => {info.FullTypeName}.From({deserializationExpressionForRegistration}));");
             }
         }
+
         sb.AppendLine();
         sb.AppendLine("                if (mapper == BsonMapper.Global) _initialized = true;");
         sb.AppendLine("            }");
@@ -319,47 +360,6 @@ internal static class CodeBuilder
         sb.AppendLine();
 
         return sb.ToString();
-    }
-
-    // Helper to get the LiteDB BsonValue accessor
-    private static string GetBsonAccessor(ITypeSymbol primitiveTypeSymbol)
-    {
-        // Check specific system types first by full name
-        var fullTypeName = primitiveTypeSymbol.ToDisplayString();
-        switch (fullTypeName)
-        {
-            case "System.Guid": return "AsGuid";
-            case "System.DateTime": return "AsDateTime";
-            case "System.DateTimeOffset": return "AsDateTime"; // Store as DateTime
-            case "System.TimeSpan": return "AsInt64"; // Store as ticks
-            case "System.DateOnly": return "AsInt32"; // Store as day number
-            case "System.TimeOnly": return "AsInt64"; // Store as ticks since midnight
-        }
-
-        // Then check special types
-        switch (primitiveTypeSymbol.SpecialType)
-        {
-            case SpecialType.System_Boolean: return "AsBoolean";
-            case SpecialType.System_Char: return "AsString";
-            case SpecialType.System_SByte:
-            case SpecialType.System_Byte:
-            case SpecialType.System_Int16:
-            case SpecialType.System_UInt16:
-            case SpecialType.System_Int32:
-            case SpecialType.System_UInt32:
-                return "AsInt32";
-            case SpecialType.System_Int64: return "AsInt64";
-            case SpecialType.System_UInt64:
-            case SpecialType.System_Single:
-            case SpecialType.System_Double:
-            case SpecialType.System_Decimal:
-                return "AsDecimal";
-            case SpecialType.System_String: return "AsString";
-            default:
-                if (primitiveTypeSymbol.TypeKind == TypeKind.Enum)
-                    return "AsInt32";
-                return "RawValue"; // Fallback for unsupported types
-        }
     }
 
     public static void AppendTypeSummary(StringBuilder sb, string summary)
@@ -388,6 +388,7 @@ internal static class CodeBuilder
             var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
             sb.AppendLine($"{Indent}private static readonly {info.TypeName} {fieldName};");
         }
+
         sb.AppendLine("#pragma warning restore IDE1006");
         sb.AppendLine();
         sb.AppendLine($"{Indent}static {info.TypeName}()");
@@ -398,9 +399,14 @@ internal static class CodeBuilder
             var formattedValue = FormatValue(info.PrimitiveTypeSymbol, instance.Value);
             sb.AppendLine($"{NestedIndent}{fieldName} = new {info.TypeName}({formattedValue});");
         }
+
         sb.AppendLine();
-        sb.AppendLine($"{NestedIndent}// Auto-register with LiteDB");
-        sb.AppendLine($"{NestedIndent}LiteDbMapper.RegisterType();");
+        sb.AppendLine($"{NestedIndent}// Auto-register with LiteDB if available");
+        sb.AppendLine(
+            $"{NestedIndent}#if NETSTANDARD2_0_OR_GREATER || NETCOREAPP3_1_OR_GREATER // Check if LiteDB might be present");
+        sb.AppendLine(
+            $"{NestedIndent}try {{ LiteDbMapper.RegisterType(); }} catch {{ /* LiteDB not available or registration failed, ignore */ }}");
+        sb.AppendLine($"{NestedIndent}#endif");
         sb.AppendLine($"{Indent}}}");
         sb.AppendLine();
         foreach (var instance in info.PredefinedInstances)
@@ -416,6 +422,7 @@ internal static class CodeBuilder
             sb.AppendLine($"{Indent}public static partial {info.TypeName} {propertyName} => {fieldName};");
             sb.AppendLine();
         }
+
         sb.AppendLine("#endregion");
         sb.AppendLine();
     }
@@ -426,6 +433,9 @@ internal static class CodeBuilder
         sb.AppendLine($"{NestedIndent}/// <summary>Provides LiteDB serialization support.</summary>");
         sb.AppendLine($"{NestedIndent}internal static class LiteDbMapper");
         sb.AppendLine($"{NestedIndent}{{");
+        sb.AppendLine($"{DoubleNestedIndent}private static bool _registered = false;"); // Track registration per type
+        sb.AppendLine($"{DoubleNestedIndent}private static readonly object _lock = new object();"); // Lock per type
+        sb.AppendLine();
         sb.AppendLine($"{DoubleNestedIndent}static LiteDbMapper()");
         sb.AppendLine($"{DoubleNestedIndent}{{");
         sb.AppendLine($"{DoubleNestedIndent}    // Auto-register this type when the mapper is first used");
@@ -434,21 +444,42 @@ internal static class CodeBuilder
         sb.AppendLine();
         sb.AppendLine($"{DoubleNestedIndent}public static void RegisterType()");
         sb.AppendLine($"{DoubleNestedIndent}{{");
-        sb.AppendLine($"{DoubleNestedIndent}    LiteDB.BsonMapper.Global.RegisterType<{info.TypeName}>(");
+        sb.AppendLine(
+            $"{DoubleNestedIndent}    RegisterType(LiteDB.BsonMapper.Global);"); // Register with global mapper by default
+        sb.AppendLine($"{DoubleNestedIndent}}}");
+        sb.AppendLine();
+        sb.AppendLine(
+            $"{DoubleNestedIndent}public static void RegisterType(LiteDB.BsonMapper mapper)"); // Allow specific mapper
+        sb.AppendLine($"{DoubleNestedIndent}{{");
+        sb.AppendLine($"{DoubleNestedIndent}    lock(_lock)"); // Use the lock
+        sb.AppendLine($"{DoubleNestedIndent}    {{");
+        sb.AppendLine(
+            $"{DoubleNestedIndent}        if (_registered && mapper == LiteDB.BsonMapper.Global) return; // Avoid re-registering globally");
+        sb.AppendLine();
+        sb.AppendLine(
+            $"{DoubleNestedIndent}        mapper.RegisterType<{info.FullTypeName}>("); // Use fully qualified name
 
         // Special handling for DateOnly
-        if (info.PrimitiveTypeName.Contains("DateOnly"))
+        if (info.PrimitiveTypeName == "global::System.DateOnly") // Use fully qualified name
         {
-            sb.AppendLine($"{DoubleNestedIndent}        serialize: value => new BsonValue(value.Value.DayNumber),");
-            sb.AppendLine($"{DoubleNestedIndent}        deserialize: bson => {info.TypeName}.From(System.DateOnly.FromDayNumber(bson.AsInt32))");
+            sb.AppendLine($"{DoubleNestedIndent}            serialize: value => new BsonValue(value.Value.DayNumber),");
+            sb.AppendLine(
+                $"{DoubleNestedIndent}            deserialize: bson => {info.FullTypeName}.From(global::System.DateOnly.FromDayNumber(bson.AsInt32))"); // Use fully qualified name
         }
         else
         {
-            sb.AppendLine($"{DoubleNestedIndent}        serialize: value => new BsonValue(value.Value),");
-            sb.AppendLine($"{DoubleNestedIndent}        deserialize: bson => {info.TypeName}.From(bson.{GetBsonAccessor(info.PrimitiveTypeSymbol)})");
+            // Use the helper to get the correct expression for converting BsonValue to the primitive type
+            var deserializationExpressionForMapper = GetDeserializationExpression(info, "bson");
+            sb.AppendLine($"{DoubleNestedIndent}            serialize: value => new BsonValue(value.Value),");
+            sb.AppendLine(
+                $"{DoubleNestedIndent}            deserialize: bson => {info.FullTypeName}.From({deserializationExpressionForMapper})"); // Use fully qualified name and helper
         }
 
-        sb.AppendLine($"{DoubleNestedIndent}    );");
+        sb.AppendLine($"{DoubleNestedIndent}        );");
+        sb.AppendLine();
+        sb.AppendLine(
+            $"{DoubleNestedIndent}        if (mapper == LiteDB.BsonMapper.Global) _registered = true; // Mark as registered globally");
+        sb.AppendLine($"{DoubleNestedIndent}    }}"); // End lock
         sb.AppendLine($"{DoubleNestedIndent}}}");
         sb.AppendLine($"{NestedIndent}}}");
     }
@@ -467,51 +498,144 @@ internal static class CodeBuilder
         sb.AppendLine();
     }
 
+    private static string GetDeserializationExpression(WrapperTypeInfo info, string bsonVariable)
+    {
+        var specialType = info.PrimitiveTypeSymbol.SpecialType;
+        var primitiveTypeName = info.PrimitiveTypeName;
+
+        switch (specialType)
+        {
+            case SpecialType.System_Double:
+                return $"global::System.Convert.ToDouble({bsonVariable}.AsDecimal)";
+            case SpecialType.System_Single:
+                return $"global::System.Convert.ToSingle({bsonVariable}.AsDecimal)";
+            default:
+            {
+                switch (primitiveTypeName)
+                {
+                    case "global::System.TimeOnly":
+                        return $"global::System.TimeOnly.FromTimeSpan(global::System.TimeSpan.FromTicks({bsonVariable}.AsInt64))";
+                    case "global::System.TimeSpan":
+                        return $"global::System.TimeSpan.FromTicks({bsonVariable}.AsInt64)";
+                    case "global::System.DateTimeOffset":
+                        return $"{bsonVariable}.AsDateTime";
+                    default:
+                    {
+                        var accessor = GetBsonAccessor(info.PrimitiveTypeSymbol);
+                        return $"{bsonVariable}.{accessor}";
+                    }
+                }
+            }
+        }
+    }
+
+    private static string GetBsonAccessor(ITypeSymbol primitiveTypeSymbol)
+    {
+        var fullTypeName = primitiveTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+
+        var typeAccessors = new Dictionary<string, string>
+        {
+            ["global::System.Guid"] = "AsGuid",
+            ["global::System.DateTime"] = "AsDateTime",
+            ["global::System.DateTimeOffset"] = "AsDateTime",
+            ["global::System.TimeSpan"] = "AsInt64",
+            ["global::System.DateOnly"] = "AsInt32",
+            ["global::System.TimeOnly"] = "AsInt64"
+        };
+
+        if (typeAccessors.TryGetValue(fullTypeName, out var accessor))
+            return accessor;
+
+        var specialTypeAccessors = new Dictionary<SpecialType, string>
+        {
+            [SpecialType.System_Boolean] = "AsBoolean",
+            [SpecialType.System_Char] = "AsString",
+            [SpecialType.System_SByte] = "AsInt32",
+            [SpecialType.System_Byte] = "AsInt32",
+            [SpecialType.System_Int16] = "AsInt32",
+            [SpecialType.System_UInt16] = "AsInt32",
+            [SpecialType.System_Int32] = "AsInt32",
+            [SpecialType.System_UInt32] = "AsInt32",
+            [SpecialType.System_Int64] = "AsInt64",
+            [SpecialType.System_UInt64] = "AsInt64",
+            [SpecialType.System_Single] = "AsDecimal",
+            [SpecialType.System_Double] = "AsDecimal",
+            [SpecialType.System_Decimal] = "AsDecimal",
+            [SpecialType.System_String] = "AsString"
+        };
+
+        if (specialTypeAccessors.TryGetValue(primitiveTypeSymbol.SpecialType, out accessor))
+            return accessor;
+
+        return primitiveTypeSymbol.TypeKind == TypeKind.Enum ? "AsInt32" : "RawValue";
+    }
+
     private static string FormatValue(ITypeSymbol typeSymbol, object value)
     {
-        if (value == null)
+        if (value == null!)
             return "null";
 
-        // Handle specific system types first by full name
-        var fullTypeName = typeSymbol.ToDisplayString();
-        switch (fullTypeName)
-        {
-            case "System.Guid":
-                // Check if value is already a Guid or if it's a string that can be parsed as a Guid
-                if (value is Guid guid)
-                    return $"new System.Guid(\"{guid}\")";
-                if (value is string guidStr)
-                    return $"new System.Guid(\"{guidStr}\")";
-                return $"new System.Guid({value})";
-            case "System.DateTime":
-                if (value is DateTime dt)
-                    return $"new System.DateTime({dt.Ticks}L, System.DateTimeKind.{dt.Kind})";
-                return $"new System.DateTime({value})";
-            case "System.DateTimeOffset":
-                if (value is DateTimeOffset dto)
-                    return
-                        $"new System.DateTimeOffset({dto.Ticks}L, System.TimeSpan.FromMinutes({dto.Offset.TotalMinutes}))";
-                return $"new System.DateTimeOffset({value})";
-            case "System.TimeSpan":
-                if (value is TimeSpan ts)
-                    return $"System.TimeSpan.FromTicks({ts.Ticks}L)";
-                return $"System.TimeSpan.FromTicks({value}L)";
-            case "System.DateOnly":
-                // Convert to appropriate constructor format, assuming stored as integer or via "new DateOnly(year, month, day)"
-                return $"System.DateOnly.FromDayNumber({value})";
-            case "System.TimeOnly":
-                // Convert to appropriate constructor format, assuming stored as ticks since midnight
-                return $"System.TimeOnly.FromTimeSpan(System.TimeSpan.FromTicks({value}L))";
-        }
+        var fullTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
-        // Then check special types
-        return typeSymbol.SpecialType switch
+        var typeFormatters = new Dictionary<string, Func<object, string>>
         {
-            SpecialType.System_String => $"\"{value}\"",
-            SpecialType.System_Boolean => value.ToString().ToLowerInvariant(),
-            SpecialType.System_Char => $"'{value}'",
-            _ => value.ToString()
+            ["global::System.Guid"] = v => v switch
+            {
+                Guid guid => $"new global::System.Guid(\"{guid}\")",
+                string guidStr when Guid.TryParse(guidStr, out var parsedGuid) =>
+                    $"new global::System.Guid(\"{parsedGuid}\")",
+                _ => "new global::System.Guid()"
+            },
+            ["global::System.DateTime"] = v => v switch
+            {
+                DateTime dt => $"new global::System.DateTime({dt.Ticks}L, global::System.DateTimeKind.{dt.Kind})",
+                _ => "default(global::System.DateTime)"
+            },
+            ["global::System.DateTimeOffset"] = v => v switch
+            {
+                DateTimeOffset dto =>
+                    $"new global::System.DateTimeOffset({dto.Ticks}L, global::System.TimeSpan.FromMinutes({dto.Offset.TotalMinutes}))",
+                _ => "default(global::System.DateTimeOffset)"
+            },
+            ["global::System.TimeSpan"] = v => v switch
+            {
+                TimeSpan ts => $"global::System.TimeSpan.FromTicks({ts.Ticks}L)",
+                long ticks => $"global::System.TimeSpan.FromTicks({ticks}L)",
+                _ => "global::System.TimeSpan.Zero"
+            },
+            ["global::System.DateOnly"] = v => v switch
+            {
+                int dayNumber => $"global::System.DateOnly.FromDayNumber({dayNumber})",
+                string dateStr => $"global::System.DateOnly.Parse(\"{dateStr}\")", // Assume runtime handles parsing
+                _ => "default(global::System.DateOnly)"
+            },
+            ["global::System.TimeOnly"] = v => v switch
+            {
+                long ticks => $"global::System.TimeOnly.FromTimeSpan(global::System.TimeSpan.FromTicks({ticks}L))",
+                string timeStr => $"global::System.TimeOnly.Parse(\"{timeStr}\")", // Assume runtime handles parsing
+                _ => "default(global::System.TimeOnly)"
+            }
         };
+
+        if (typeFormatters.TryGetValue(fullTypeName, out var formatter))
+            return formatter(value);
+
+        var specialTypeFormatters = new Dictionary<SpecialType, Func<object, string>>
+        {
+            [SpecialType.System_String] = v => $"\"{v}\"",
+            [SpecialType.System_Boolean] = v => v.ToString().ToLowerInvariant(),
+            [SpecialType.System_Char] = v => $"'{v}'",
+            [SpecialType.System_Int64] = v => $"{v}L",
+            [SpecialType.System_UInt64] = v => $"{v}UL",
+            [SpecialType.System_Single] = v => $"{v}F",
+            [SpecialType.System_Double] = v => $"{v}D",
+            [SpecialType.System_Decimal] = v => $"{v}M"
+        };
+
+        if (specialTypeFormatters.TryGetValue(typeSymbol.SpecialType, out formatter))
+            return formatter(value);
+
+        return value.ToString();
     }
 
     // Helper to append the auto-generated header
@@ -548,10 +672,12 @@ internal static class CodeBuilder
     }
 
     // Helper for type declaration
-    public static void AppendTypeDeclaration(StringBuilder sb, string typeKindKeyword, string typeName, string sealedModifier)
+    public static void AppendTypeDeclaration(StringBuilder sb, string typeKindKeyword, string typeName,
+        string sealedModifier)
     {
         var typeDecl = typeKindKeyword.Contains("record")
-            ? $"{typeKindKeyword.Replace("record", "partial record")}" : $"partial {typeKindKeyword}";
+            ? $"{typeKindKeyword.Replace("record", "partial record")}"
+            : $"partial {typeKindKeyword}";
         sb.AppendLine($"{Indent}{sealedModifier}{typeDecl} {typeName}");
         sb.AppendLine($"{Indent}{{");
     }

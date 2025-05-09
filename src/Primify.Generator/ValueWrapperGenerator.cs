@@ -21,6 +21,12 @@ namespace System.Runtime.CompilerServices
 
 namespace Primify.Generator
 {
+    /// <summary>
+    /// A Roslyn Incremental Source Generator that generates boilerplate code for value wrapper types
+    /// decorated with the [Primify] attribute. It supports generating constructors, converters,
+    /// validation hooks, normalization hooks, and serialization support for System.Text.Json,
+    /// Newtonsoft.Json, and LiteDB.
+    /// </summary>
     [Generator]
     public class ValueWrapperGenerator : IIncrementalGenerator
     {
@@ -38,6 +44,10 @@ namespace Primify.Generator
             // Add other supported non-intrinsic types here if needed
         };
 
+        /// <summary>
+        /// Initializes the generator by registering syntax receivers and the source output action.
+        /// </summary>
+        /// <param name="context">The incremental generator initialization context.</param>
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
             // Register syntax provider to collect TypeDeclarationSyntax nodes with attributes
@@ -198,15 +208,20 @@ namespace Primify.Generator
 
                 var hasNormalize = typeSymbol.GetMembers()
                     .OfType<IMethodSymbol>()
-                    .Any(m => m.Name == "Normalize" && m.Parameters.Length == 1 &&
-                              m.Parameters[0].Type.ToDisplayString() == primitiveTypeName);
+                    .Any(m => m.Name == "Normalize" &&
+                              m.IsStatic && // Normalize should be static
+                              m.Parameters.Length == 1 &&
+                              SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, primitiveTypeSymbol) &&
+                              SymbolEqualityComparer.Default.Equals(m.ReturnType, primitiveTypeSymbol));
 
                 var hasValidate = typeSymbol.GetMembers()
                     .OfType<IMethodSymbol>()
-                    .Any(m => m.Name == "Validate" && m.Parameters.Length == 1 &&
-                              m.Parameters[0].Type.ToDisplayString()
-                                  .Equals(primitiveTypeName, StringComparison.Ordinal) &&
-                              m is { IsStatic: true, IsPartialDefinition: true });
+                    .Any(m => m.Name == "Validate" &&
+                              m.IsStatic && // Validate should be static
+                              m.Parameters.Length == 1 &&
+                              SymbolEqualityComparer.Default.Equals(m.Parameters[0].Type, primitiveTypeSymbol) &&
+                              m.ReturnsVoid && // Validate returns void
+                              m.IsPartialDefinition); // User's Validate impl is a partial method definition part
 
                 typesToProcess.Add(new WrapperTypeInfo(
                     TypeName: typeName,
@@ -519,7 +534,7 @@ namespace Primify.Generator
             bool hasNamespace = !string.IsNullOrEmpty(info.Namespace);
             if (hasNamespace)
             {
-                CodeBuilder.AppendNamespace(sb, info.Namespace);
+                CodeBuilder.AppendNamespace(sb, info.Namespace!); // Added null-forgiving operator
             }
 
             // Type doc comment
@@ -603,9 +618,9 @@ namespace Primify.Generator
         string NewtonsoftConverterName,
         bool HasNormalizeImplementation,
         bool HasValidateImplementation,
-        TypeDeclarationSyntax DeclarationSyntax, // Moved before optional parameters
-        List<(string PropertyName, object Value)>? PredefinedInstances = null,
-        HashSet<string> UserDefinedProperties = null
+        TypeDeclarationSyntax DeclarationSyntax,
+        HashSet<string> UserDefinedProperties, // Required
+        List<(string PropertyName, object Value)>? PredefinedInstances = null // Optional last
     );
 }
 #endif

@@ -273,7 +273,7 @@ public class BasicUsageTests
         var username = System.Text.Json.JsonSerializer.Deserialize<Username>(json);
 
         // Assert
-        await Assert.That(username.Value).IsEquivalentTo(testValue.ToLower());
+        await Assert.That(username!.Value).IsEquivalentTo(testValue.ToLower()); // Added !
     }
 
     [Test]
@@ -313,7 +313,7 @@ public class BasicUsageTests
         var result = System.Text.Json.JsonSerializer.Deserialize<Username>(json);
 
         // Assert
-        await Assert.That(result.Value).IsEquivalentTo(expectedValue.ToLower());
+        await Assert.That(result!.Value).IsEquivalentTo(expectedValue.ToLower()); // Added !
     }
 
     [Test]
@@ -340,7 +340,7 @@ public class BasicUsageTests
         var result = Newtonsoft.Json.JsonConvert.DeserializeObject<Username>(json);
 
         // Assert
-        await Assert.That(result.Value).IsEquivalentTo(expectedValue.ToLower());
+        await Assert.That(result!.Value).IsEquivalentTo(expectedValue.ToLower()); // Added !
     }
 
     [Test]
@@ -360,7 +360,7 @@ public class BasicUsageTests
     public async Task LiteDB_DeserializesNullCorrectly()
     {
         // Arrange
-        var mapper = new LiteDB.BsonMapper();
+        var mapper = new BsonMapper();
         var bsonValue = LiteDB.BsonValue.Null;
 
         // Act
@@ -377,7 +377,7 @@ public class BasicUsageTests
         var testValue = "user@domain.com";
         var systemJson = $"\"{testValue}\"";
         var newtonsoftJson = $"\"{testValue}\"";
-        var mapper = new LiteDB.BsonMapper();
+        var mapper = new BsonMapper();
         var bsonValue = mapper.Serialize(testValue);
 
         // Act & Assert (should throw due to validation)
@@ -405,7 +405,7 @@ public class BasicUsageTests
         var result = mapper.Deserialize<Username>(bsonValue);
 
         // Assert
-        await Assert.That(result.Value).IsEquivalentTo(expectedValue.ToLower());
+        await Assert.That(result!.Value).IsEquivalentTo(expectedValue.ToLower()); // Added !
     }
 
     [Test]
@@ -421,15 +421,15 @@ public class BasicUsageTests
         // System.Text.Json
         var systemJson = $"\"{guidString}\"";
         var systemResult = System.Text.Json.JsonSerializer.Deserialize<ItemId>(systemJson);
-        await Assert.That((Guid)systemResult.Value).IsEqualTo(guid);
+        await Assert.That((Guid)systemResult!.Value).IsEqualTo(guid); // Added !
 
         // Newtonsoft.Json
         var newtonResult = Newtonsoft.Json.JsonConvert.DeserializeObject<ItemId>($"\"{guidString}\"");
-        await Assert.That((Guid)newtonResult.Value).IsEqualTo(guid);
+        await Assert.That((Guid)newtonResult!.Value).IsEqualTo(guid); // Added !
 
         // LiteDB
-        var mapper = new LiteDB.BsonMapper();
-        var bsonValue = new LiteDB.BsonValue(guid);
+        var mapper = new BsonMapper();
+        var bsonValue = new BsonValue(guid);
         var liteResult = mapper.Deserialize<Guid>(bsonValue);
         await Assert.That(liteResult).IsEqualTo(guid);
     }
@@ -507,13 +507,13 @@ public class BasicUsageTests
         };
 
         // Assert
-        await Assert.That((Guid)((ItemId)doc["id"]).Value).IsEqualTo(expectedId);
-        await Assert.That(((Username)doc["username"]).Value).IsEqualTo(expectedUsername.ToLower());
+        await Assert.That((Guid)((ItemId)doc["id"])!.Value).IsEqualTo(expectedId); // Added !
+        await Assert.That(((Username)doc["username"])!.Value).IsEqualTo(expectedUsername.ToLower()); // Added !
     }
 
     record MyEntity
     {
-        public ItemId Id { get; set; }
-        public Username Name { get; set; }
+        public ItemId Id { get; set; } = default!;
+        public Username Name { get; set; } = default!;
     }
 }

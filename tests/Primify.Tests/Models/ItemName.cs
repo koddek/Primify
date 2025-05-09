@@ -24,3 +24,8 @@ public readonly partial record struct ItemName
         return value.Trim();
     }
 }
+
+// Validate signature for user code
+// static partial void Validate(PRIMITIVETYPE value)
+// Normalize signature for user code
+// private static partial PRIMITIVETYPE Normalize(PRIMITIVETYPE value)

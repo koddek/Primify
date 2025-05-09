@@ -59,8 +59,7 @@ internal static class ValueWrapperDiagnostics
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 
-    private static readonly DiagnosticDescriptor ErrorPredefinedFieldRequirements = new(
-        id: "VWG008",
+    private static readonly DiagnosticDescriptor ErrorPredefinedFieldRequirements = new(        id: "VWG008",
         title: "Invalid Predefined Field",
         messageFormat: "Field '{0}' decorated with PredefinedValueAttribute must be static, readonly, and private",
         category: "ValueWrapperGenerator",

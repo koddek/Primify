@@ -27,7 +27,7 @@ public class DateOnlyTests
     {
         string json = $"\"{Today:yyyy-MM-dd}\"";
         var dayId = JsonSerializer.Deserialize<DayId>(json);
-        await Assert.That(dayId.Value).IsEqualTo(Today);
+        await Assert.That(dayId!.Value).IsEqualTo(Today); // Added !
     }
 
     [Test]
@@ -44,7 +44,7 @@ public class DateOnlyTests
         string json = JsonSerializer.Serialize(TodayId);
         Console.WriteLine(json);
         var roundTripped = JsonSerializer.Deserialize<DayId>(json);
-        await Assert.That(roundTripped.Value).IsEqualTo(TodayId.Value);
+        await Assert.That(roundTripped!.Value).IsEqualTo(TodayId.Value); // Added !
     }
 
     #endregion
@@ -65,7 +65,7 @@ public class DateOnlyTests
     {
         string json = $"\"{Today:yyyy-MM-dd}\"";
         var dayId = JsonConvert.DeserializeObject<DayId>(json);
-        await Assert.That(dayId.Value).IsEqualTo(Today);
+        await Assert.That(dayId!.Value).IsEqualTo(Today); // Added !
     }
 
     [Test]
@@ -82,7 +82,7 @@ public class DateOnlyTests
         string json = JsonConvert.SerializeObject(TodayId);
         Console.WriteLine(json);
         var roundTripped = JsonConvert.DeserializeObject<DayId>(json);
-        await Assert.That(roundTripped.Value).IsEqualTo(TodayId.Value);
+        await Assert.That(roundTripped!.Value).IsEqualTo(TodayId.Value); // Added !
     }
 
     #endregion
@@ -162,8 +162,8 @@ public class DateOnlyTests
 
     class ContainerClass
     {
-        public DayId Id { get; set; }
-        public string Name { get; set; }
+        public DayId Id { get; set; } = default!;
+        public string Name { get; set; } = default!;
     }
 
     [Test]
@@ -172,7 +172,7 @@ public class DateOnlyTests
         var container = new ContainerClass { Id = TodayId, Name = "Test" };
         var json = JsonSerializer.Serialize(container);
         var deserialized = JsonSerializer.Deserialize<ContainerClass>(json);
-        await Assert.That(deserialized.Id.Value).IsEqualTo(TodayId.Value);
+        await Assert.That(deserialized!.Id.Value).IsEqualTo(TodayId.Value); // Added !
         await Assert.That(deserialized.Name).IsEqualTo("Test");
     }
 
@@ -182,7 +182,7 @@ public class DateOnlyTests
         var container = new ContainerClass { Id = TodayId, Name = "Test" };
         var json = JsonConvert.SerializeObject(container);
         var deserialized = JsonConvert.DeserializeObject<ContainerClass>(json);
-        await Assert.That(deserialized.Id.Value).IsEqualTo(TodayId.Value);
+        await Assert.That(deserialized!.Id.Value).IsEqualTo(TodayId.Value); // Added !
         await Assert.That(deserialized.Name).IsEqualTo("Test");
     }
 
@@ -193,7 +193,7 @@ public class DateOnlyTests
         var container = new ContainerClass { Id = TodayId, Name = "Test" };
         var bson = BsonMapper.Global.ToDocument(container);
         var deserialized = BsonMapper.Global.Deserialize<ContainerClass>(bson);
-        await Assert.That(deserialized.Id.Value).IsEqualTo(TodayId.Value);
+        await Assert.That(deserialized!.Id.Value).IsEqualTo(TodayId.Value); // Added !
         await Assert.That(deserialized.Name).IsEqualTo("Test");
     }
 
