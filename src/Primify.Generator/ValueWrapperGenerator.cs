@@ -184,7 +184,7 @@ namespace Primify.Generator
                     continue;
                 }
 
-                var predefinedInstances = new List<(string PropertyName, object Value)>();
+                var predefinedInstances = new List<(string PropertyName, object Value, ITypeSymbol? TargetTypeForParsing)>();
                 var userDefinedProperties = new HashSet<string>();
 
                 GetPredefinedProperties(compilation, context, typeSymbol, userDefinedProperties, primitiveTypeSymbol,
@@ -279,7 +279,7 @@ namespace Primify.Generator
 
         private static void GetPredefinedProperties(Compilation compilation, SourceProductionContext context,
             INamedTypeSymbol typeSymbol, HashSet<string> userDefinedProperties, ITypeSymbol primitiveTypeSymbol,
-            List<(string PropertyName, object Value)> predefinedInstances
+            List<(string PropertyName, object Value, ITypeSymbol? TargetTypeForParsing)> predefinedInstances
         )
         {
             // Collect static properties defined by the user to avoid generating duplicates
@@ -329,33 +329,69 @@ namespace Primify.Generator
                     if (attr.ConstructorArguments.Length > 0 &&
                         attr.ConstructorArguments[0].Value is { } value)
                     {
-                        var valueTypeSymbol = GetValueType(value, primitiveTypeSymbol, compilation);
+                        ITypeSymbol? targetTypeForParsing = null;
+                        bool isStringParsingScenario = false;
                         bool isCompatible = false;
 
-                        if (valueTypeSymbol != null)
+                        if (value is string stringValue)
                         {
-                            isCompatible = SymbolEqualityComparer.Default.Equals(valueTypeSymbol, primitiveTypeSymbol);
-                            if (!isCompatible && valueTypeSymbol.SpecialType != SpecialType.None &&
-                                primitiveTypeSymbol.SpecialType != SpecialType.None)
+                            var primitiveTypeName = primitiveTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                            if (primitiveTypeName == "global::System.DateTime" ||
+                                primitiveTypeName == "global::System.DateOnly" ||
+                                primitiveTypeName == "global::System.DateTimeOffset" ||
+                                primitiveTypeName == "global::System.TimeOnly")
                             {
-                                isCompatible = CanImplicitlyConvert(valueTypeSymbol.SpecialType,
-                                    primitiveTypeSymbol.SpecialType);
+                                targetTypeForParsing = primitiveTypeSymbol; // Infer from wrapper
+                                isStringParsingScenario = true;
+                                isCompatible = true; // String value with a date/time primitive is considered compatible for parsing
                             }
-                            // Handle Guid specifically if primitive is Guid and value is string
-                            else if (!isCompatible && primitiveTypeSymbol.ToDisplayString() == "global::System.Guid" &&
-                                     value is string)
+                            else
                             {
-                                isCompatible = Guid.TryParse(value.ToString(), out _);
-                                isCompatible = true;
+                                // String value but not a date/time primitive, treat as normal string
+                                var valueTypeSymbol = GetValueType(value, primitiveTypeSymbol, compilation);
+                                if (valueTypeSymbol != null)
+                                {
+                                    isCompatible = SymbolEqualityComparer.Default.Equals(valueTypeSymbol, primitiveTypeSymbol);
+                                    // Handle Guid specifically if primitive is Guid and value is string
+                                    if (!isCompatible && primitiveTypeSymbol.ToDisplayString() == "global::System.Guid")
+                                    {
+                                        isCompatible = true; // Already handled by GetValueType returning System.Guid
+                                    }
+                                }
+                            }
+                        }
+                        else // Not a string value
+                        {
+                            // Original logic for non-string-parsed values or single argument constructor
+                            var valueTypeSymbol = GetValueType(value, primitiveTypeSymbol, compilation);
+                            if (valueTypeSymbol != null)
+                            {
+                                isCompatible = SymbolEqualityComparer.Default.Equals(valueTypeSymbol, primitiveTypeSymbol);
+                                if (!isCompatible && valueTypeSymbol.SpecialType != SpecialType.None &&
+                                    primitiveTypeSymbol.SpecialType != SpecialType.None)
+                                {
+                                    isCompatible = CanImplicitlyConvert(valueTypeSymbol.SpecialType,
+                                        primitiveTypeSymbol.SpecialType);
+                                }
+                                // Handle Guid specifically if primitive is Guid and value is string
+                                else if (!isCompatible && primitiveTypeSymbol.ToDisplayString() == "global::System.Guid" &&
+                                         value is string)
+                                {
+                                    // For Guid, if a string is provided, we assume it's parseable.
+                                    // The actual parsing happens in the generated code.
+                                    // GetValueType already returns System.Guid for this case.
+                                    isCompatible = true;
+                                }
                             }
                         }
 
                         if (isCompatible)
                         {
-                            predefinedInstances.Add((propertySymbol.Name, value));
+                            predefinedInstances.Add((propertySymbol.Name, value, isStringParsingScenario ? targetTypeForParsing : null));
                         }
-                        else
+                        else if (!isStringParsingScenario) // Only report error if not already handled by string parsing scenario
                         {
+                             var valueTypeSymbol = GetValueType(value, primitiveTypeSymbol, compilation); // Re-get for error message
                             context.ReportDiagnostic(Diagnostic.Create(
                                 ValueWrapperDiagnostics.ErrorInvalidAttributeUsage,
                                 propertySymbol.Locations.FirstOrDefault(),
@@ -620,7 +656,7 @@ namespace Primify.Generator
         bool HasValidateImplementation,
         TypeDeclarationSyntax DeclarationSyntax,
         HashSet<string> UserDefinedProperties, // Required
-        List<(string PropertyName, object Value)>? PredefinedInstances = null // Optional last
+        List<(string PropertyName, object Value, ITypeSymbol? TargetTypeForParsing)>? PredefinedInstances = null // Optional last
     );
 }
 #endif

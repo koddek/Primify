@@ -396,8 +396,35 @@ internal static class CodeBuilder
         foreach (var instance in info.PredefinedInstances)
         {
             var fieldName = $"_{char.ToLowerInvariant(instance.PropertyName[0])}{instance.PropertyName.Substring(1)}";
-            var formattedValue = FormatValue(info.PrimitiveTypeSymbol, instance.Value);
-            sb.AppendLine($"{NestedIndent}{fieldName} = new {info.TypeName}({formattedValue});");
+            string valueInitialization;
+            if (instance.TargetTypeForParsing != null && instance.Value is string stringValue)
+            {
+                var targetTypeName = instance.TargetTypeForParsing.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                switch (targetTypeName)
+                {
+                    case "global::System.DateTime":
+                        valueInitialization = $"global::System.DateTime.Parse(\"{stringValue}\", System.Globalization.CultureInfo.InvariantCulture)";
+                        break;
+                    case "global::System.DateOnly":
+                        valueInitialization = $"global::System.DateOnly.Parse(\"{stringValue}\", System.Globalization.CultureInfo.InvariantCulture)";
+                        break;
+                    case "global::System.DateTimeOffset":
+                        valueInitialization = $"global::System.DateTimeOffset.Parse(\"{stringValue}\", System.Globalization.CultureInfo.InvariantCulture)";
+                        break;
+                    case "global::System.TimeOnly":
+                        valueInitialization = $"global::System.TimeOnly.Parse(\"{stringValue}\", System.Globalization.CultureInfo.InvariantCulture)";
+                        break;
+                    default:
+                        // Fallback to FormatValue if TargetTypeForParsing is not a recognized date/time type for string parsing
+                        valueInitialization = FormatValue(info.PrimitiveTypeSymbol, instance.Value);
+                        break;
+                }
+            }
+            else
+            {
+                valueInitialization = FormatValue(info.PrimitiveTypeSymbol, instance.Value);
+            }
+            sb.AppendLine($"{NestedIndent}{fieldName} = new {info.TypeName}({valueInitialization});");
         }
 
         sb.AppendLine();
