@@ -64,21 +64,18 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Restore dependencies
-        run: dotnet restore "${{ env.SOLUTION_FILE }}"
+      - name: Build Solution
+        run: dotnet build "${{ env.SOLUTION_FILE }}" --configuration "${{ env.CONFIGURATION }}"
 
-      - name: Build solution
-        run: dotnet build "${{ env.SOLUTION_FILE }}" --no-restore --configuration "${{ env.CONFIGURATION }}"
-
-      - name: Pack NuGet Package
+      - name: Pack Main Project
         run: |
           mkdir -p "${{ env.OUTPUT_DIR }}"
-          dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --no-build --configuration "${{ env.CONFIGURATION }}" -o "${{ env.OUTPUT_DIR }}"
+          dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" --no-build -o "${{ env.OUTPUT_DIR }}"
 
       - name: Set up local NuGet feed
         run: |
           mkdir -p "${{ env.LOCAL_FEED }}"
-          cp "${{ env.OUTPUT_DIR }}"/*.nupkg "${{ env.LOCAL_FEED }}"/
+          find "${{ env.OUTPUT_DIR }}" -name "*.nupkg" -exec cp {} "${{ env.LOCAL_FEED }}"/ \;
           dotnet nuget add source "${{ github.workspace }}/${{ env.LOCAL_FEED }}" --name local-feed
 
       - name: Build Demo Project
@@ -86,7 +83,7 @@ jobs:
           dotnet restore "${{ env.DEMO_PROJECT_FILE }}"
           dotnet build "${{ env.DEMO_PROJECT_FILE }}" --no-restore --configuration "${{ env.CONFIGURATION }}"
 
-      - name: 'Find NuGet Package'
+      - name: Find NuGet Package
         id: find_nupkg
         run: |
           PACKAGE_FILE=$(find "${{ env.OUTPUT_DIR }}" -name "*.nupkg" | head -n 1)

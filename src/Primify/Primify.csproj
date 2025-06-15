@@ -20,26 +20,16 @@
     <ItemGroup>
         <!-- Include the source generator as an analyzer -->
         <ProjectReference Include="..\Primify.Generator\Primify.Generator.csproj"
-                        PrivateAssets="all"
-                        ReferenceOutputAssembly="false"
-                        OutputItemType="Analyzer" />
+                          PrivateAssets="all"
+                          ReferenceOutputAssembly="false"
+                          OutputItemType="Analyzer"/>
 
         <!-- Include the libraries that the end-user will need -->
         <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj"
-                        PrivateAssets="all" />
+                          PrivateAssets="all"/>
 
         <ProjectReference Include="..\Primify.Converters\Primify.Converters.csproj"
-                        PrivateAssets="all" />
-    </ItemGroup>
-
-    <!-- Include the generator as a content file -->
-    <ItemGroup>
-        <None Include="..\Primify.Generator\bin\$(Configuration)\$(TargetFramework)\Primify.Generator.dll"
-              Pack="true"
-              PackagePath="analyzers/dotnet/cs"
-              Visible="false"
-              CopyToOutputDirectory="PreserveNewest"
-              Link="analyzers/dotnet/cs/Primify.Generator.dll" />
+                          PrivateAssets="all"/>
     </ItemGroup>
 
 </Project>
