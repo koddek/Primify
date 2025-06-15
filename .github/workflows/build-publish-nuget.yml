@@ -64,10 +64,16 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Build and Pack NuGet Package
+      - name: Restore dependencies
+        run: dotnet restore "${{ env.SOLUTION_FILE }}"
+
+      - name: Build solution
+        run: dotnet build "${{ env.SOLUTION_FILE }}" --no-restore --configuration "${{ env.CONFIGURATION }}"
+
+      - name: Pack NuGet Package
         run: |
           mkdir -p "${{ env.OUTPUT_DIR }}"
-          dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" -o "${{ env.OUTPUT_DIR }}"
+          dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --no-build --configuration "${{ env.CONFIGURATION }}" -o "${{ env.OUTPUT_DIR }}"
 
       - name: Set up local NuGet feed
         run: |
