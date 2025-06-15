@@ -52,7 +52,7 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Create SNK file from secret
-        if: secrets.SNK_FILE_BASE64 != ''
+        if: secrets.SNK_FILE_BASE64
         run: echo "${{ secrets.SNK_FILE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/Primify.snk
 
       - name: Install xmllint (for version extraction)
@@ -65,8 +65,6 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      # Build the entire solution and pack the main project in one step.
-      # `dotnet pack` will automatically build the project and its dependencies first.
       - name: Build and Pack NuGet Package
         run: |
           mkdir -p "${{ env.OUTPUT_DIR }}"
@@ -75,14 +73,11 @@ jobs:
       - name: Set up local NuGet feed
         run: |
           mkdir -p "${{ env.LOCAL_FEED }}"
-          # Copy the created package to the local feed directory
           cp "${{ env.OUTPUT_DIR }}"/*.nupkg "${{ env.LOCAL_FEED }}"/
-          # Add the local feed to the NuGet sources for this workflow
           dotnet nuget add source "${{ github.workspace }}/${{ env.LOCAL_FEED }}" --name local-feed
 
       - name: Build Demo Project
         run: |
-          # Restore and build the demo project, using the local feed for the new package
           dotnet restore "${{ env.DEMO_PROJECT_FILE }}"
           dotnet build "${{ env.DEMO_PROJECT_FILE }}" --no-restore --configuration "${{ env.CONFIGURATION }}"
 
