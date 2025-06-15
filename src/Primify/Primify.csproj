@@ -3,7 +3,7 @@
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.3.4</Version>
+        <Version>1.3.5</Version>
         <Description>Primify is a source generator that creates strongly-typed wrappers around primitive types, enhancing type safety and code clarity.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson;primitive-types</PackageTags>
         <IsPackable>true</IsPackable>
