@@ -1,11 +1,8 @@
 <Project>
   <PropertyGroup>
-    <!--
-      Set a default TargetFramework for all library projects.
-      This ensures maximum compatibility. Projects that need a different TFM
-      (like a test project or modern-only converters) can override this.
-    -->
+    <!-- Default to the lowest supported framework for maximum compatibility -->
     <TargetFramework Condition="'$(TargetFramework)' == ''">netstandard2.0</TargetFramework>
+    <TargetFrameworks Condition="'$(IsPackable)' == 'true'">netstandard2.0;net9.0</TargetFrameworks>
 
     <!-- Common package properties -->
     <Authors>Koddek</Authors>
@@ -15,6 +12,7 @@
     <RepositoryUrl>https://github.com/koddek/Primify</RepositoryUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <IsPackable>false</IsPackable> <!-- Default to not packable, override in individual projects -->
 
     <!-- Build configuration -->
     <LangVersion>latest</LangVersion>

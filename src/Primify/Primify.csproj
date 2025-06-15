@@ -7,20 +7,39 @@
         <Description>Primify is a source generator that creates strongly-typed wrappers around primitive types, enhancing type safety and code clarity.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson;primitive-types</PackageTags>
 
-        <!-- This project is the one that will be packed -->
+        <!-- This is the main package that will be published -->
         <IsPackable>true</IsPackable>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 
-        <!-- This ensures that this project itself doesn't produce a DLL, as it's just a container for other projects -->
-        <IncludeBuildOutput>false</IncludeBuildOutput>
+        <!-- Include source files in the package -->
+        <IncludeSymbols>true</IncludeSymbols>
+        <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+        <IncludeSource>true</IncludeSource>
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- This includes the generator as an analyzer so it runs during compile time -->
-        <ProjectReference Include="..\Primify.Generator\Primify.Generator.csproj" PrivateAssets="all" OutputItemType="Analyzer"/>
+        <!-- Include the source generator as an analyzer -->
+        <ProjectReference Include="..\Primify.Generator\Primify.Generator.csproj"
+                        PrivateAssets="all"
+                        ReferenceOutputAssembly="false"
+                        OutputItemType="Analyzer" />
 
-        <!-- These are the libraries that the end-user will need to reference -->
-        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj"/>
-        <ProjectReference Include="..\Primify.Converters\Primify.Converters.csproj"/>
+        <!-- Include the libraries that the end-user will need -->
+        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj"
+                        PrivateAssets="all" />
+
+        <ProjectReference Include="..\Primify.Converters\Primify.Converters.csproj"
+                        PrivateAssets="all" />
+    </ItemGroup>
+
+    <!-- Include the generator as a content file -->
+    <ItemGroup>
+        <None Include="..\Primify.Generator\bin\$(Configuration)\$(TargetFramework)\Primify.Generator.dll"
+              Pack="true"
+              PackagePath="analyzers/dotnet/cs"
+              Visible="false"
+              CopyToOutputDirectory="PreserveNewest"
+              Link="analyzers/dotnet/cs/Primify.Generator.dll" />
     </ItemGroup>
 
 </Project>
