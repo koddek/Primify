@@ -15,8 +15,4 @@
         <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3" />
     </ItemGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" />
-    </ItemGroup>
-
 </Project>
