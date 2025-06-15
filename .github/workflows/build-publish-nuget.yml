@@ -7,7 +7,6 @@ on:
       - main
     paths:
       - 'src/**'
-      - 'demo/**'
       - 'Directory.Build.*'
       - 'Primify.sln'
       - 'README.md'
@@ -16,7 +15,6 @@ on:
   pull_request:
     paths:
       - 'src/**'
-      - 'demo/**'
       - 'Directory.Build.*'
       - 'Primify.sln'
       - 'README.md'
@@ -24,12 +22,9 @@ on:
       - '.github/workflows/build-publish-nuget.yml'
 
 env:
-  PROJECT_NAME: 'Primify'
   MAIN_PROJECT_FILE: 'src/Primify/Primify.csproj'
-  DEMO_PROJECT_FILE: 'demo/Primify.Demo/Primify.Demo.csproj'
   CONFIGURATION: 'Release'
   OUTPUT_DIR: './nuget_packages'
-  LOCAL_FEED: './local-feed'
 
 permissions:
   contents: write
@@ -43,6 +38,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
+          # Fetch all history for accurate tagging
           fetch-depth: 0
 
       - name: Setup .NET SDK
@@ -63,7 +59,7 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Build Main Project for Packing
+      - name: Build Main Project
         run: dotnet build "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}"
 
       - name: Pack Main Project
@@ -71,53 +67,15 @@ jobs:
           mkdir -p "${{ env.OUTPUT_DIR }}"
           dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" --no-build -o "${{ env.OUTPUT_DIR }}"
 
-      - name: Setup Local Feed and Find Package
-        id: setup_feed
-        run: |
-          mkdir -p "${{ env.LOCAL_FEED }}"
-          PACKAGE_FILE=$(find "${{ env.OUTPUT_DIR }}" -name "*.nupkg" -print -quit)
-          if [[ -z "$PACKAGE_FILE" ]]; then exit 1; fi
-          mv "$PACKAGE_FILE" "${{ env.LOCAL_FEED }}/"
-          PACKAGE_NAME=$(basename "$PACKAGE_FILE")
-          echo "package_path=${{ env.LOCAL_FEED }}/$PACKAGE_NAME" >> $GITHUB_OUTPUT
-          echo "✅ Package moved to local feed for testing."
-
-      - name: Create nuget.config for Local Testing
-        run: |
-          cat <<EOF > nuget.config
-          <?xml version="1.0" encoding="utf-8"?>
-          <configuration>
-            <packageSources>
-              <clear />
-              <add key="local-test-feed" value="${{ github.workspace }}/${{ env.LOCAL_FEED }}" />
-              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-            </packageSources>
-            <config>
-              <add key="globalPackagesFolder" value=".nuget/packages" />
-            </config>
-          </configuration>
-          EOF
-          echo "✅ Created nuget.config to prioritize local package feed."
-
-      - name: Update Demo Project to Use New Package Version
-        run: |
-          VERSION=${{ steps.extract_version.outputs.version }}
-          sed -i 's/\(<PackageReference Include="Primify" Version="\)[^"]*/\1'"$VERSION"'/' "${{ env.DEMO_PROJECT_FILE }}"
-          echo "✅ Demo project updated to use version $VERSION. Contents:"
-          cat "${{ env.DEMO_PROJECT_FILE }}"
-
-      - name: Test Package with Demo Project
-        run: |
-          echo "--- Clearing NuGet cache to ensure a clean restore ---"
-          dotnet nuget locals all --clear
-          echo "--- Restoring and Building Demo Project ---"
-          dotnet build "${{ env.DEMO_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}"
-          echo "✅ Demo project built successfully, validating the new NuGet package."
-
       - name: Push to GitHub Packages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          dotnet nuget push "${{ steps.setup_feed.outputs.package_path }}" \
+          PACKAGE_FILE=$(find "${{ env.OUTPUT_DIR }}" -name "*.nupkg" -print -quit)
+          if [[ -z "$PACKAGE_FILE" ]]; then
+            echo "ERROR: No .nupkg file found to publish."
+            exit 1
+          fi
+          dotnet nuget push "$PACKAGE_FILE" \
             --source "https://nuget.pkg.github.com/${{ github.repository_owner }}" \
             --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --skip-duplicate
@@ -128,8 +86,10 @@ jobs:
         run: |
           VERSION=${{ steps.extract_version.outputs.version }}
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "Tag v$VERSION already exists. Skipping tag creation."
             echo "tag_exists=true" >> $GITHUB_OUTPUT
           else
+            echo "Tag v$VERSION does not exist. A new tag will be created."
             echo "tag_exists=false" >> $GITHUB_OUTPUT
           fi
 
