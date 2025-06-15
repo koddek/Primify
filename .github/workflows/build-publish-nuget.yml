@@ -52,7 +52,6 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Create SNK file from secret
-        if: secrets.SNK_FILE_BASE64
         run: echo "${{ secrets.SNK_FILE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/Primify.snk
 
       - name: Install xmllint (for version extraction)
