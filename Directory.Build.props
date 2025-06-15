@@ -1,8 +1,7 @@
 <Project>
+
   <PropertyGroup>
-    <!-- Default to the lowest supported framework for maximum compatibility -->
     <TargetFramework Condition="'$(TargetFramework)' == ''">netstandard2.0</TargetFramework>
-    <TargetFrameworks Condition="'$(IsPackable)' == 'true'">netstandard2.0;net9.0</TargetFrameworks>
 
     <!-- Common package properties -->
     <Authors>Koddek</Authors>
@@ -12,40 +11,33 @@
     <RepositoryUrl>https://github.com/koddek/Primify</RepositoryUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <IsPackable>false</IsPackable> <!-- Default to not packable, override in individual projects -->
+    <IsPackable>false</IsPackable> <!-- default off; override per‑project -->
 
-    <!-- Build configuration -->
     <LangVersion>latest</LangVersion>
     <ImplicitUsings>true</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NoWarn>$(NoWarn);CS1591</NoWarn> <!-- Suppress missing XML comment warnings -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
 
-    <!-- Publishing and debugging configuration -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
   </PropertyGroup>
 
-  <!-- Strong-name signing for all non-test library projects -->
+  <!-- Sign all non‑test assemblies -->
   <PropertyGroup Condition="'$(IsTestProject)' != 'true'">
     <SignAssembly>true</SignAssembly>
     <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)Primify.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
-  <!-- Common package files for all projects -->
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" />
-    <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="/" />
-  </ItemGroup>
-
-  <!-- Common package references for all projects -->
-  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)icon.png"     Pack="true" PackagePath="/" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
   </ItemGroup>
 
-  <!-- Source generator specific settings -->
   <PropertyGroup Condition="'$(IsRoslynComponent)' == 'true'">
     <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
   </PropertyGroup>
+
 </Project>
