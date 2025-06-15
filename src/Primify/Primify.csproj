@@ -3,7 +3,7 @@
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.3.3</Version>
+        <Version>1.3.4</Version>
         <Description>Primify is a source generator that creates strongly-typed wrappers around primitive types, enhancing type safety and code clarity.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson;primitive-types</PackageTags>
         <IsPackable>true</IsPackable>
@@ -26,8 +26,8 @@
     </ItemGroup>
 
     <ItemGroup>
-        <None Include="..\Primify.Attributes\bin\$(Configuration)\$(TargetFramework)\Primify.Attributes.dll" Pack="true" PackagePath="lib\$(TargetFramework)" />
-        <None Include="..\Primify.Converters\bin\$(Configuration)\$(TargetFramework)\Primify.Converters.dll" Pack="true" PackagePath="lib\$(TargetFramework)" />
+        <None Include="..\Primify.Attributes\bin\$(Configuration)\netstandard2.0\Primify.Attributes.dll" Pack="true" PackagePath="lib\$(TargetFramework)" />
+        <None Include="..\Primify.Converters\bin\$(Configuration)\net9.0\Primify.Converters.dll" Pack="true" PackagePath="lib\$(TargetFramework)" />
     </ItemGroup>
 
 </Project>
