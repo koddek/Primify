@@ -18,18 +18,16 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- Include the source generator as an analyzer -->
+        <!-- The Generator IS a private asset. This is CORRECT. -->
         <ProjectReference Include="..\Primify.Generator\Primify.Generator.csproj"
                           PrivateAssets="all"
                           ReferenceOutputAssembly="false"
-                          OutputItemType="Analyzer"/>
+                          OutputItemType="Analyzer" />
 
-        <!-- Include the libraries that the end-user will need -->
-        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj"
-                          PrivateAssets="all"/>
+        <!-- These libraries MUST be public so the consumer can use them. -->
+        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" />
 
-        <ProjectReference Include="..\Primify.Converters\Primify.Converters.csproj"
-                          PrivateAssets="all"/>
+        <ProjectReference Include="..\Primify.Converters\Primify.Converters.csproj" />
     </ItemGroup>
 
 </Project>
