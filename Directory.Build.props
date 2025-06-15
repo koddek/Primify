@@ -1,6 +1,13 @@
 <Project>
   <PropertyGroup>
-    <!-- Common properties for all projects -->
+    <!--
+      Set a default TargetFramework for all library projects.
+      This ensures maximum compatibility. Projects that need a different TFM
+      (like a test project or modern-only converters) can override this.
+    -->
+    <TargetFramework Condition="'$(TargetFramework)' == ''">netstandard2.0</TargetFramework>
+
+    <!-- Common package properties -->
     <Authors>Koddek</Authors>
     <Copyright>© koddek 2025</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -8,17 +15,24 @@
     <RepositoryUrl>https://github.com/koddek/Primify</RepositoryUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <SignAssembly>true</SignAssembly>
-    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)Primify.snk</AssemblyOriginatorKeyFile>
-    
-    <!-- Common build configuration -->
+
+    <!-- Build configuration -->
     <LangVersion>latest</LangVersion>
+    <ImplicitUsings>true</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn> <!-- Suppress missing XML comment warnings -->
+
+    <!-- Publishing and debugging configuration -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
+  </PropertyGroup>
+
+  <!-- Strong-name signing for all non-test library projects -->
+  <PropertyGroup Condition="'$(IsTestProject)' != 'true'">
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)Primify.snk</AssemblyOriginatorKeyFile>
   </PropertyGroup>
 
   <!-- Common package files for all projects -->
@@ -31,4 +45,9 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="all" />
   </ItemGroup>
+
+  <!-- Source generator specific settings -->
+  <PropertyGroup Condition="'$(IsRoslynComponent)' == 'true'">
+    <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+  </PropertyGroup>
 </Project>

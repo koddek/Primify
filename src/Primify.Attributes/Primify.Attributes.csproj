@@ -1,9 +1,14 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <PackageId>Primify.Attributes</PackageId>
-        <Version>1.0.0</Version>
         <Description>Attributes for Primify source generation.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson</PackageTags>
+        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
+        <EnableNETAnalyzers>true</EnableNETAnalyzers>
+        <AnalysisMode>All</AnalysisMode>
+        <OutputType>Library</OutputType>
+
+        <!-- This project should not be packed as a separate NuGet package -->
+        <IsPackable>false</IsPackable>
     </PropertyGroup>
 </Project>
