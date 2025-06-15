@@ -3,31 +3,31 @@
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.3.2</Version>
+        <Version>1.3.3</Version>
         <Description>Primify is a source generator that creates strongly-typed wrappers around primitive types, enhancing type safety and code clarity.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson;primitive-types</PackageTags>
-
-        <!-- This is the main package that will be published -->
         <IsPackable>true</IsPackable>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-
-        <!-- Include source files in the package -->
+        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <IncludeSource>true</IncludeSource>
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- The Generator IS a private asset. This is CORRECT. -->
         <ProjectReference Include="..\Primify.Generator\Primify.Generator.csproj"
                           PrivateAssets="all"
                           ReferenceOutputAssembly="false"
                           OutputItemType="Analyzer" />
 
-        <!-- These libraries MUST be public so the consumer can use them. -->
-        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" />
+        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj"
+                          PrivateAssets="all" />
 
-        <ProjectReference Include="..\Primify.Converters\Primify.Converters.csproj" />
+        <ProjectReference Include="..\Primify.Converters\Primify.Converters.csproj"
+                          PrivateAssets="all" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\Primify.Attributes\bin\$(Configuration)\$(TargetFramework)\Primify.Attributes.dll" Pack="true" PackagePath="lib\$(TargetFramework)" />
+        <None Include="..\Primify.Converters\bin\$(Configuration)\$(TargetFramework)\Primify.Converters.dll" Pack="true" PackagePath="lib\$(TargetFramework)" />
     </ItemGroup>
 
 </Project>
