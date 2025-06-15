@@ -1,26 +1,26 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
-        <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <PackageId>Primify.Generator</PackageId>
-        <Version>1.0.0</Version>
         <Description>Source generator for Primify.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson</PackageTags>
-
-        <!-- Source generator specific properties -->
         <IsRoslynComponent>true</IsRoslynComponent>
-        <IncludeBuildOutput>true</IncludeBuildOutput>
-        <DevelopmentDependency>true</DevelopmentDependency>
+
+        <!-- ADD THIS LINE to fix analyzer warnings like RS1036 -->
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-        <NoPackageAnalysis>true</NoPackageAnalysis>
+        <RootNamespace>Primify.Generator</RootNamespace>
+        <OutputType>Library</OutputType>
+
+        <!-- This project should not be packed as a separate NuGet package -->
+        <IsPackable>false</IsPackable>
     </PropertyGroup>
 
     <ItemGroup>
-        <!--Don't update these packages. It causes the generator to fail-->
-        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.3.4" PrivateAssets="all"/>
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="4.14.0" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" PrivateAssets="all"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" />
+        <!-- The generator needs the attributes to identify what to generate -->
+        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" PrivateAssets="all"/>
     </ItemGroup>
 </Project>

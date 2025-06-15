@@ -1,0 +1,268 @@
+using System.Collections.Immutable;
+using System.Text;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
+
+namespace Primify.Generator;
+
+[Generator]
+public sealed class WrapGenerator : IIncrementalGenerator
+{
+    public void Initialize(IncrementalGeneratorInitializationContext context)
+    {
+        var typeProvider = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                predicate: (s, _) => IsCandidateTypeDeclaration(s),
+                transform: (ctx, _) => GetTypeDeclarationForSourceGen(ctx)
+            )
+            .Where(t => t.ReportAttributeFound);
+
+        // Generate the source code.
+        context.RegisterSourceOutput(
+            context.CompilationProvider.Combine(typeProvider.Collect()),
+            ((ctx, t) => GenerateCode(ctx, t.Left, t.Right)));
+    }
+
+    private static bool IsCandidateTypeDeclaration(SyntaxNode node)
+    {
+        // First check if it's a type declaration
+        if (node is not TypeDeclarationSyntax typeDeclaration)
+        {
+            return false;
+        }
+
+        // Quick syntax check for supported types
+        if (typeDeclaration is not (ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax))
+        {
+            return false;
+        }
+
+        // Quick check for partial keyword
+        if (!typeDeclaration.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
+        {
+            return false;
+        }
+
+        // Quick check for any attributes
+        if (typeDeclaration.AttributeLists.Count == 0)
+        {
+            return false;
+        }
+
+        // Quick check for potential Primify attribute
+        return typeDeclaration.AttributeLists
+            .Any(attrList => attrList.Attributes
+                .Select(attr => attr.Name.ToString())
+                .Any(name => name == Names.PrimifyAttName ||
+                             name == Names.PrimifyAttNameWithPostfix ||
+                             name.StartsWith(Names.PrimifyAttName + "<")));
+    }
+
+    private static TypeDeclarationWithDiagnostics GetTypeDeclarationForSourceGen(
+        GeneratorSyntaxContext context)
+    {
+        var typeDeclaration = (TypeDeclarationSyntax)context.Node;
+        var diagnostics = ImmutableArray<Diagnostic>.Empty;
+        var hasWrapAttribute = false;
+
+        // Check if it's a type we care about
+        if (typeDeclaration is not (ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax))
+        {
+            diagnostics = diagnostics.Add(Diagnostics.CreateUnsupportedTypeKind(
+                typeDeclaration.Identifier.GetLocation(),
+                typeDeclaration.Identifier.Text));
+            return new TypeDeclarationWithDiagnostics(typeDeclaration, hasWrapAttribute, diagnostics);
+        }
+
+        // Check if it has the partial keyword
+        if (!typeDeclaration.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
+        {
+            diagnostics = diagnostics.Add(Diagnostics.CreateMissingPartialModifier(
+                typeDeclaration.Identifier.GetLocation(),
+                typeDeclaration.Identifier.Text));
+            return new TypeDeclarationWithDiagnostics(typeDeclaration, hasWrapAttribute, diagnostics);
+        }
+
+        // Check if it has any attributes
+        if (typeDeclaration.AttributeLists.Count == 0)
+        {
+            diagnostics = diagnostics.Add(Diagnostics.CreateNoAttributesFound(
+                typeDeclaration.Identifier.GetLocation(),
+                typeDeclaration.Identifier.Text));
+            return new TypeDeclarationWithDiagnostics(typeDeclaration, hasWrapAttribute, diagnostics);
+        }
+
+        // Look for Primify attribute
+        var hasWrapAttributeDirect = false;
+        foreach (var attribute in typeDeclaration.AttributeLists.SelectMany(al => al.Attributes))
+        {
+            if (ModelExtensions.GetSymbolInfo(context.SemanticModel, attribute).Symbol is not IMethodSymbol
+                attributeSymbol)
+                continue;
+
+            var attributeName = attributeSymbol.ContainingType.ToDisplayString();
+            if (attributeName.StartsWith(Names.PrimifyAttFullName))
+            {
+                hasWrapAttribute = true;
+                hasWrapAttributeDirect = true;
+                break;
+            }
+        }
+
+        if (!hasWrapAttributeDirect)
+        {
+            diagnostics = diagnostics.Add(Diagnostics.CreateMissingWrapAttribute(
+                typeDeclaration.Identifier.GetLocation(),
+                typeDeclaration.Identifier.Text));
+        }
+
+        return new TypeDeclarationWithDiagnostics(typeDeclaration, hasWrapAttribute, diagnostics);
+    }
+
+    private static void GenerateCode(
+        SourceProductionContext context,
+        Compilation compilation,
+        ImmutableArray<TypeDeclarationWithDiagnostics> typeDeclarations
+    )
+    {
+        // Report all diagnostics first
+        foreach (var diagnostic in typeDeclarations.SelectMany(type => type.Diagnostics))
+        {
+            context.ReportDiagnostic(diagnostic);
+        }
+
+        // Go through all filtered class declarations.
+        foreach (var typeWithDiag in typeDeclarations)
+        {
+            var typeDeclarationSyntax = typeWithDiag.TypeDeclaration;
+
+            // We need to get semantic model of the class to retrieve metadata.
+            var semanticModel = compilation.GetSemanticModel(typeDeclarationSyntax.SyntaxTree);
+
+            // Symbols allow us to get the compile-time information.
+            if (ModelExtensions.GetDeclaredSymbol(semanticModel, typeDeclarationSyntax) is not INamedTypeSymbol
+                typeSymbol)
+                continue;
+
+            // Check if the user has implemented Normalize
+            var hasNormalizeImplementation = typeSymbol.GetMembers("Normalize")
+                .OfType<IMethodSymbol>()
+                .Any(m => !m.IsAbstract && m is
+                    { IsVirtual: false, IsOverride: false, PartialImplementationPart: null });
+
+            // Check if the user has implemented Normalize
+            var hasValidateImplementation = typeSymbol.GetMembers("Validate")
+                .OfType<IMethodSymbol>()
+                .Any(m => !m.IsAbstract && m is
+                    { IsVirtual: false, IsOverride: false, PartialImplementationPart: null });
+
+            var namespaceName = typeSymbol.ContainingNamespace.ToDisplayString();
+
+            // Get the type keyword based on the original declaration
+            var typeKeyword = typeDeclarationSyntax switch
+            {
+                ClassDeclarationSyntax => "class",
+                StructDeclarationSyntax => "struct",
+                RecordDeclarationSyntax record => record.ClassOrStructKeyword.IsKind(SyntaxKind.ClassKeyword)
+                    ? "record class"
+                    : "record struct",
+                _ => "class" // fallback
+            };
+
+            // Get the modifiers from the original declaration
+            var modifiers = string.Join(" ", typeDeclarationSyntax.Modifiers
+                .Where(m => m.IsKind(SyntaxKind.ReadOnlyKeyword) ||
+                            m.IsKind(SyntaxKind.SealedKeyword))
+                .Select(m => m.Text));
+
+            modifiers = modifiers.Length == 0 ? "" : modifiers + " ";
+
+            // 'Identifier' means the token of the node. Get type name from the syntax node.
+            var wrapperName = typeDeclarationSyntax.Identifier.Text;
+
+            // Get the generic type parameter from the Primify<T> attribute
+            var attribute = typeSymbol.GetAttributes()
+                .FirstOrDefault(a => a.AttributeClass?.Name.StartsWith(Names.PrimifyAttName) == true);
+
+            var wrapperArgument = attribute?.AttributeClass?.TypeArguments.FirstOrDefault()?.ToDisplayString() ??
+                                  "object";
+
+            // Build up the source code
+            var code = $$$"""
+                          // <auto-generated/>
+
+                          using System;
+                          using System.Runtime.CompilerServices;
+                          using LiteDB;
+                          using Primify.Converters;
+
+                          namespace {{{namespaceName}}};
+
+                          /// <summary>
+                          /// Automatically registers the LiteDB BSON mapper for the {{{wrapperName}}} type.
+                          /// </summary>
+                          file static class {{{wrapperName}}}LiteDbInitializer
+                          {
+                              [ModuleInitializer]
+                              internal static void Register()
+                              {
+                                  // This is the ideal, reflection-free registration.
+                                  // It's faster, safer, and cleaner than using a helper class.
+                                  BsonMapper.Global.RegisterType<{{{wrapperName}}}>(
+                                      serialize: wrapper => new LiteDB.BsonValue(wrapper.Value),
+                                      // Use RawValue and Convert.ChangeType
+                                      deserialize: bson =>
+                                      {
+                                          var rawValue = bson.RawValue;
+                                          var typedValue = ({{{wrapperArgument}}})Convert.ChangeType(rawValue, typeof({{{wrapperArgument}}}));
+                                          
+                                          return {{{wrapperName}}}.From(typedValue);
+                                      }
+                                  );
+                              }
+                          }
+
+                          [System.Text.Json.Serialization.JsonConverter(typeof(SystemTextJsonConverter<{{{wrapperName}}}, {{{wrapperArgument}}}>))]
+                          [Newtonsoft.Json.JsonConverter(typeof(NewtonsoftJsonConverter<{{{wrapperName}}}, {{{wrapperArgument}}}>))]
+                          [LiteDbSerializable]
+                          {{{modifiers}}}partial {{{typeKeyword}}} {{{wrapperName}}} : IPrimify<{{{wrapperName}}}, {{{wrapperArgument}}}>
+                          {
+                              public {{{wrapperArgument}}} Value { get; }
+                              
+                              private {{{wrapperName}}}({{{wrapperArgument}}} value) => Value = value;
+
+                              public static {{{wrapperName}}} From({{{wrapperArgument}}} value)
+                              {
+                                  var processedValue = value;
+
+                                  // Enable Normalize only when the user has an implementation
+                                  {{{(hasNormalizeImplementation ? "" : "// ")}}}processedValue = Normalize(processedValue);
+                                  
+                                  // Enable Validate only when the user has an implementation
+                                  {{{(hasValidateImplementation ? "" : "// ")}}}Validate(processedValue);
+                                  
+                                  return new {{{wrapperName}}}(processedValue);
+                              }
+                              
+                              public static explicit operator {{{wrapperName}}}({{{wrapperArgument}}} value) => From(value);
+                              public static explicit operator {{{wrapperArgument}}}({{{wrapperName}}} value) => value.Value;
+                              
+                              // Casting for BSON
+                              public static implicit operator LiteDB.BsonValue({{{wrapperName}}} value) => new LiteDB.BsonValue(value.Value);
+                              public static implicit operator {{{wrapperName}}}(LiteDB.BsonValue value) => From(({{{wrapperArgument}}})value.RawValue);
+                              
+                              /// <summary>
+                              /// Returns a string representation of the wrapper, in a record-like format.
+                              /// Example: "UserId { Value = 123 }".
+                              /// </summary>
+                              public override string ToString() => $"{nameof({{{wrapperName}}})} {{ Value = {Value} }}";
+                          }
+                          """;
+
+            // Add the source code to the compilation.
+            context.AddSource($"{wrapperName}.g.cs", SourceText.From(code, Encoding.UTF8));
+        }
+    }
+}

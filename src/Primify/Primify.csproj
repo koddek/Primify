@@ -1,42 +1,26 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
     <PropertyGroup>
-        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+        <TargetFramework>net9.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.2.4</Version>
-        <Description>A library providing custom value types with JSON serialization through source generation.</Description>
-        <PackageTags>json;source-generator;value-types;dotnet;litedb-bson</PackageTags>
+        <Version>1.3.0</Version>
+        <Description>Primify is a source generator that creates strongly-typed wrappers around primitive types, enhancing type safety and code clarity.</Description>
+        <PackageTags>json;source-generator;value-types;dotnet;litedb-bson;primitive-types</PackageTags>
+
+        <!-- This project is the one that will be packed -->
+        <IsPackable>true</IsPackable>
+
+        <!-- This ensures that this project itself doesn't produce a DLL, as it's just a container for other projects -->
+        <IncludeBuildOutput>false</IncludeBuildOutput>
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../Primify.Attributes/Primify.Attributes.csproj" PrivateAssets="All" />
-        <ProjectReference Include="../Primify.Generator/Primify.Generator.csproj" PrivateAssets="All" ReferenceOutputAssembly="false" />
+        <!-- This includes the generator as an analyzer so it runs during compile time -->
+        <ProjectReference Include="..\Primify.Generator\Primify.Generator.csproj" PrivateAssets="all" OutputItemType="Analyzer"/>
+
+        <!-- These are the libraries that the end-user will need to reference -->
+        <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj"/>
+        <ProjectReference Include="..\Primify.Converters\Primify.Converters.csproj"/>
     </ItemGroup>
 
-    <PropertyGroup>
-        <!-- Define output paths for easy reference with forward slashes -->
-        <AttributesOutputPath>$(MSBuildThisFileDirectory)../Primify.Attributes/bin/$(Configuration)/$(TargetFramework)/Primify.Attributes.dll</AttributesOutputPath>
-        <GeneratorOutputPath>$(MSBuildThisFileDirectory)../Primify.Generator/bin/$(Configuration)/$(TargetFramework)/Primify.Generator.dll</GeneratorOutputPath>
-    </PropertyGroup>
-
-    <ItemGroup>
-        <!-- Include the Attributes in the lib folder -->
-        <None Include="$(AttributesOutputPath)" Pack="true" PackagePath="lib/$(TargetFramework)" Visible="false" />
-
-        <!-- Include the Generator in the analyzers folder -->
-        <None Include="$(GeneratorOutputPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-    </ItemGroup>
-
-    <!-- Verify the output files exist before packaging -->
-    <Target Name="VerifyFilesExist" BeforeTargets="GenerateNuspec">
-        <Message Text="Attributes DLL path: $(AttributesOutputPath)" Importance="high" />
-        <Message Text="Generator DLL path: $(GeneratorOutputPath)" Importance="high" />
-
-        <Error
-                Condition="!Exists('$(AttributesOutputPath)')"
-                Text="Attributes DLL not found at: $(AttributesOutputPath)" />
-
-        <Error
-                Condition="!Exists('$(GeneratorOutputPath)')"
-                Text="Generator DLL not found at: $(GeneratorOutputPath)" />
-    </Target>
 </Project>
