@@ -64,15 +64,17 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Build and Pack Main Project
+      - name: Restore and build main project
+        run: |
+          # Restore and build only the main project and its dependencies
+          dotnet restore "${{ env.MAIN_PROJECT_FILE }}"
+          dotnet build "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" --no-restore
+
+      - name: Create and pack NuGet package
         run: |
           # Create output directory
           mkdir -p "${{ env.OUTPUT_DIR }}"
-          
-          # First, build the solution to ensure all dependencies are built
-          dotnet build "${{ env.SOLUTION_FILE }}" --configuration "${{ env.CONFIGURATION }}" --no-restore
-          
-          # Then pack the main project
+          # Pack the main project
           dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" -o "${{ env.OUTPUT_DIR }}" --no-build
 
       - name: Set up local NuGet feed
@@ -80,13 +82,13 @@ jobs:
           # Create local feed directory
           mkdir -p "${{ env.LOCAL_FEED }}"
           # Copy the package to local feed
-          cp "${{ env.OUTPUT_DIR }}"/*.nupkg "${{ env.LOCAL_FEED }}"/
+          cp "${{ env.OUTPUT_DIR }}"/*.nupkg "${{ env.LOCAL_FEED }}" /
           # Add local feed to NuGet sources
           dotnet nuget add source "${{ github.workspace }}/${{ env.LOCAL_FEED }}" --name local-feed
 
       - name: Build Demo Project
         run: |
-          # Restore and build the demo project
+          # Restore and build the demo project using the local feed
           dotnet restore "${{ env.DEMO_PROJECT_FILE }}" --source "${{ github.workspace }}/${{ env.LOCAL_FEED }}" --source https://api.nuget.org/v3/index.json
           dotnet build "${{ env.DEMO_PROJECT_FILE }}" --no-restore --configuration "${{ env.CONFIGURATION }}"
 
