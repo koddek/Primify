@@ -20,6 +20,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "demo", "demo", "{B42EB002-B
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Primify.Demo", "demo\Primify.Demo\Primify.Demo.csproj", "{0588FE28-BB87-4B13-B094-A8D667F329FF}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Primify.Benchmarks.Demo", "demo\Primify.Benchmarks.Demo\Primify.Benchmarks.Demo.csproj", "{B7568DD5-5BE1-4523-BB25-FDBE7EF4BC1E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -50,6 +52,10 @@ Global
 		{0588FE28-BB87-4B13-B094-A8D667F329FF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0588FE28-BB87-4B13-B094-A8D667F329FF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0588FE28-BB87-4B13-B094-A8D667F329FF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B7568DD5-5BE1-4523-BB25-FDBE7EF4BC1E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B7568DD5-5BE1-4523-BB25-FDBE7EF4BC1E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B7568DD5-5BE1-4523-BB25-FDBE7EF4BC1E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B7568DD5-5BE1-4523-BB25-FDBE7EF4BC1E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -61,6 +67,7 @@ Global
 		{BA11918A-DCB9-4EAF-B559-3F2739C57424} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{88E334B0-04EA-4A19-809C-484E6B9D4A4A} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{0588FE28-BB87-4B13-B094-A8D667F329FF} = {B42EB002-B263-4376-854E-79D8D4991E40}
+		{B7568DD5-5BE1-4523-BB25-FDBE7EF4BC1E} = {B42EB002-B263-4376-854E-79D8D4991E40}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {642AB09D-1F68-4979-A0F0-6D2784680ADE}

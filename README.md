@@ -122,23 +122,22 @@ BsonMapper.Global.RegisterType<UserId>(
 ```csharp
 // * Summary *
 
-BenchmarkDotNet v0.14.0, macOS Sequoia 15.3.2 (24D81) [Darwin 24.3.0]
+BenchmarkDotNet v0.15.1, macOS Sequoia 15.5 (24F74) [Darwin 24.5.0]
 Apple M1, 1 CPU, 8 logical and 8 physical cores
-.NET SDK 9.0.103
-  [Host]     : .NET 9.0.2 (9.0.225.6610), Arm64 RyuJIT AdvSIMD
-  DefaultJob : .NET 9.0.2 (9.0.225.6610), Arm64 RyuJIT AdvSIMD
+.NET SDK 9.0.300
+  [Host]     : .NET 9.0.5 (9.0.525.21509), Arm64 RyuJIT AdvSIMD
+  DefaultJob : .NET 9.0.5 (9.0.525.21509), Arm64 RyuJIT AdvSIMD
 
 // This wrapper was used
 [Primify<string>]
 public readonly partial record struct Username;
 ```
-| Method              | Mean     | Error   | StdDev   | Median   | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
-|-------------------- |---------:|--------:|---------:|---------:|------:|--------:|-------:|----------:|------------:|
-| Serialize_Raw       | 178.6 ns | 3.40 ns |  3.34 ns | 178.8 ns |  1.00 |    0.03 | 0.0076 |      48 B |        1.00 |
-| Serialize_Wrapper   | 247.6 ns | 4.70 ns |  3.93 ns | 247.0 ns |  1.39 |    0.03 | 0.0076 |      48 B |        1.00 |
-| Deserialize_Raw     | 101.9 ns | 0.87 ns |  0.72 ns | 101.6 ns |  0.57 |    0.01 | 0.0076 |      48 B |        1.00 |
-| Deserialize_Wrapper | 305.5 ns | 8.11 ns | 22.35 ns | 295.5 ns |  1.71 |    0.13 | 0.0076 |      48 B |        1.00 |
-
+| Method              | Mean      | Error    | StdDev    | Median    | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
+|-------------------- |----------:|---------:|----------:|----------:|------:|--------:|-------:|----------:|------------:|
+| Serialize_Raw       | 117.55 ns | 5.104 ns | 14.561 ns | 110.75 ns |  1.01 |    0.17 | 0.0076 |      48 B |        1.00 |
+| Serialize_Wrapper   | 151.54 ns | 3.096 ns |  6.393 ns | 150.04 ns |  1.31 |    0.15 | 0.0076 |      48 B |        1.00 |
+| Deserialize_Raw     |  91.54 ns | 1.644 ns |  2.304 ns |  91.33 ns |  0.79 |    0.09 | 0.0063 |      40 B |        0.83 |
+| Deserialize_Wrapper | 256.73 ns | 4.824 ns |  4.512 ns | 257.59 ns |  2.21 |    0.24 | 0.0062 |      40 B |        0.83 |
 
 ## Contributing
 
