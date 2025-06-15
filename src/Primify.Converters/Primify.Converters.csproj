@@ -5,12 +5,7 @@
         <PackageId>Primify.Converters</PackageId>
         <Description>JSON serialization for Primify types.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson</PackageTags>
-        <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
-        <EnableNETAnalyzers>true</EnableNETAnalyzers>
-        <AnalysisMode>All</AnalysisMode>
         <OutputType>Library</OutputType>
-
-        <!-- This project should not be packed as a separate NuGet package -->
         <IsPackable>false</IsPackable>
     </PropertyGroup>
 
@@ -18,7 +13,6 @@
         <PackageReference Include="LiteDB" Version="5.0.21" />
         <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
         <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3" />
-        <PackageReference Include="System.Text.Json" Version="9.0.6" />
     </ItemGroup>
 
     <ItemGroup>

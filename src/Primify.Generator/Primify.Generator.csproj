@@ -1,16 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+
     <PropertyGroup>
         <PackageId>Primify.Generator</PackageId>
         <Description>Source generator for Primify.</Description>
         <PackageTags>json;source-generator;value-types;dotnet;litedb-bson</PackageTags>
         <IsRoslynComponent>true</IsRoslynComponent>
-
-        <!-- ADD THIS LINE to fix analyzer warnings like RS1036 -->
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <RootNamespace>Primify.Generator</RootNamespace>
         <OutputType>Library</OutputType>
-
-        <!-- This project should not be packed as a separate NuGet package -->
         <IsPackable>false</IsPackable>
     </PropertyGroup>
 
@@ -20,7 +17,12 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- The generator needs the attributes to identify what to generate -->
         <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" PrivateAssets="all"/>
     </ItemGroup>
+
+    <!-- This ensures the generator DLL is packed into the correct folder for NuGet -->
+    <ItemGroup>
+        <None Include="$(OutputPath)\$(AssemblyName).dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+    </ItemGroup>
+
 </Project>
