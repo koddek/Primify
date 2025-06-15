@@ -7,6 +7,7 @@ on:
       - main
     paths:
       - 'src/**'
+      - 'demo/**'
       - 'Directory.Build.*'
       - 'Primify.sln'
       - 'README.md'
@@ -15,6 +16,7 @@ on:
   pull_request:
     paths:
       - 'src/**'
+      - 'demo/**'
       - 'Directory.Build.*'
       - 'Primify.sln'
       - 'README.md'
@@ -25,11 +27,11 @@ env:
   PROJECT_NAME: 'Primify'
   SOLUTION_FILE: 'Primify.sln'
   MAIN_PROJECT_FILE: 'src/Primify/Primify.csproj'
+  DEMO_PROJECT_FILE: 'demo/Primify.Demo/Primify.Demo.csproj'
   CONFIGURATION: 'Release'
-  # It's better to define the output directory once
   OUTPUT_DIR: './nuget_packages'
+  LOCAL_FEED: './local-feed'
 
-# Use the standard GITHUB_TOKEN for publishing to GitHub Packages and creating tags
 permissions:
   contents: write
   packages: write
@@ -42,51 +44,53 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          # Fetch all history for accurate tag checking
           fetch-depth: 0
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          # It's best practice to use a global.json file to specify the SDK version,
-          # but hardcoding it is also fine.
           dotnet-version: '9.0.x'
+
+      - name: Create SNK file from secret
+        run: echo "${{ secrets.SNK_FILE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/Primify.snk
 
       - name: Install xmllint (for version extraction)
         run: sudo apt-get update && sudo apt-get install -y libxml2-utils
 
-      # VERIFIED CHANGE 1: Create SNK file from a secret
-      # This is the secure way to handle signing keys. Add a repository secret
-      # named SNK_FILE_BASE64 with the base64-encoded content of your SNK file.
-      - name: Create SNK file from secret
-        run: echo "${{ secrets.SNK_FILE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/Primify.snk
-        # This shell command is verifiable and standard for handling binary secrets.
-
       - name: Extract Version
         id: extract_version
         run: |
-          # This approach is fine, but be aware it only reads from the main project file.
           VERSION=$(xmllint --xpath 'string(/Project/PropertyGroup/Version)' ${{ env.MAIN_PROJECT_FILE }})
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      # VERIFIED CHANGE 2: Build the entire solution at once
-      # 'dotnet build' on a solution file automatically handles the project dependency graph.
-      # This is simpler and less error-prone than building each project individually.
-      - name: Build Solution
-        run: dotnet build "${{ env.SOLUTION_FILE }}" --configuration "${{ env.CONFIGURATION }}"
-
-      - name: Pack the NuGet package
+      - name: Build and Pack Main Project
         run: |
-          # The -o flag is equivalent to --output
-          dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" -o "${{ env.OUTPUT_DIR }}"
+          # Create output directory
+          mkdir -p "${{ env.OUTPUT_DIR }}"
+          
+          # Build and pack the main project
+          dotnet build "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}"
+          dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" -o "${{ env.OUTPUT_DIR }}" --no-build
+
+      - name: Set up local NuGet feed
+        run: |
+          # Create local feed directory
+          mkdir -p "${{ env.LOCAL_FEED }}"
+          # Copy the package to local feed
+          cp "${{ env.OUTPUT_DIR }}"/*.nupkg "${{ env.LOCAL_FEED }}"/
+          # Add local feed to NuGet sources
+          dotnet nuget add source "${{ github.workspace }}/${{ env.LOCAL_FEED }}" --name local-feed
+
+      - name: Build Demo Project
+        run: |
+          # Restore and build the demo project
+          dotnet restore "${{ env.DEMO_PROJECT_FILE }}" --source "${{ github.workspace }}/${{ env.LOCAL_FEED }}" --source https://api.nuget.org/v3/index.json
+          dotnet build "${{ env.DEMO_PROJECT_FILE }}" --no-restore --configuration "${{ env.CONFIGURATION }}"
 
       - name: 'Find NuGet Package'
         id: find_nupkg
         run: |
-          # VERIFIED CHANGE 3: Robustly find the created package
-          # This is better than predicting the filename. It finds the first .nupkg file
-          # in the output directory and sets its path as an output variable.
           PACKAGE_FILE=$(find "${{ env.OUTPUT_DIR }}" -name "*.nupkg" | head -n 1)
           if [[ -z "$PACKAGE_FILE" ]]; then
             echo "ERROR: No .nupkg file found in ${{ env.OUTPUT_DIR }}"
@@ -95,9 +99,6 @@ jobs:
           echo "package_path=$PACKAGE_FILE" >> $GITHUB_OUTPUT
           echo "✅ Found package: $PACKAGE_FILE"
 
-      # VERIFIED CHANGE 4 & 5: Use GITHUB_TOKEN and simplify the push command
-      # The GITHUB_TOKEN is automatically available and has the correct permissions.
-      # This avoids using a long-lived Personal Access Token.
       - name: Push to GitHub Packages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
@@ -110,7 +111,6 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         id: check_tag
         run: |
-          # This logic is correct and remains unchanged.
           VERSION=${{ steps.extract_version.outputs.version }}
           if git rev-parse "v$VERSION" >/dev/null 2>&1; then
             echo "tag_exists=true" >> $GITHUB_OUTPUT
@@ -121,7 +121,6 @@ jobs:
       - name: Create Git Tag
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_tag.outputs.tag_exists == 'false'
         run: |
-          # This logic is correct. Using GITHUB_TOKEN is implicitly handled by actions/checkout's auth.
           VERSION=${{ steps.extract_version.outputs.version }}
           git config user.email "actions@github.com"
           git config user.name "GitHub Actions"
