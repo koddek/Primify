@@ -52,6 +52,7 @@ jobs:
           dotnet-version: '9.0.x'
 
       - name: Create SNK file from secret
+        if: secrets.SNK_FILE_BASE64 != ''
         run: echo "${{ secrets.SNK_FILE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/Primify.snk
 
       - name: Install xmllint (for version extraction)
@@ -64,32 +65,25 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Restore and build main project
+      # Build the entire solution and pack the main project in one step.
+      # `dotnet pack` will automatically build the project and its dependencies first.
+      - name: Build and Pack NuGet Package
         run: |
-          # Restore and build only the main project and its dependencies
-          dotnet restore "${{ env.MAIN_PROJECT_FILE }}"
-          dotnet build "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" --no-restore
-
-      - name: Create and pack NuGet package
-        run: |
-          # Create output directory
           mkdir -p "${{ env.OUTPUT_DIR }}"
-          # Pack the main project
-          dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" -o "${{ env.OUTPUT_DIR }}" --no-build
+          dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" -o "${{ env.OUTPUT_DIR }}"
 
       - name: Set up local NuGet feed
         run: |
-          # Create local feed directory
           mkdir -p "${{ env.LOCAL_FEED }}"
-          # Copy the package to local feed
-          cp "${{ env.OUTPUT_DIR }}"/*.nupkg "${{ env.LOCAL_FEED }}" /
-          # Add local feed to NuGet sources
+          # Copy the created package to the local feed directory
+          cp "${{ env.OUTPUT_DIR }}"/*.nupkg "${{ env.LOCAL_FEED }}"/
+          # Add the local feed to the NuGet sources for this workflow
           dotnet nuget add source "${{ github.workspace }}/${{ env.LOCAL_FEED }}" --name local-feed
 
       - name: Build Demo Project
         run: |
-          # Restore and build the demo project using the local feed
-          dotnet restore "${{ env.DEMO_PROJECT_FILE }}" --source "${{ github.workspace }}/${{ env.LOCAL_FEED }}" --source https://api.nuget.org/v3/index.json
+          # Restore and build the demo project, using the local feed for the new package
+          dotnet restore "${{ env.DEMO_PROJECT_FILE }}"
           dotnet build "${{ env.DEMO_PROJECT_FILE }}" --no-restore --configuration "${{ env.CONFIGURATION }}"
 
       - name: 'Find NuGet Package'
