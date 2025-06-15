@@ -64,40 +64,61 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
-      - name: Build Solution
-        run: dotnet build "${{ env.SOLUTION_FILE }}" --configuration "${{ env.CONFIGURATION }}"
+      # CORRECTED: Build the main project directly, not the whole solution.
+      # This builds only the packable library and its direct dependencies.
+      - name: Build Main Project for Packing
+        run: dotnet build "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}"
 
       - name: Pack Main Project
         run: |
           mkdir -p "${{ env.OUTPUT_DIR }}"
           dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" --no-build -o "${{ env.OUTPUT_DIR }}"
 
-      - name: Set up local NuGet feed
+      - name: Setup Local Feed and Find Package
+        id: setup_feed
         run: |
           mkdir -p "${{ env.LOCAL_FEED }}"
-          find "${{ env.OUTPUT_DIR }}" -name "*.nupkg" -exec cp {} "${{ env.LOCAL_FEED }}"/ \;
-          dotnet nuget add source "${{ github.workspace }}/${{ env.LOCAL_FEED }}" --name local-feed
-
-      - name: Build Demo Project
-        run: |
-          dotnet restore "${{ env.DEMO_PROJECT_FILE }}"
-          dotnet build "${{ env.DEMO_PROJECT_FILE }}" --no-restore --configuration "${{ env.CONFIGURATION }}"
-
-      - name: Find NuGet Package
-        id: find_nupkg
-        run: |
-          PACKAGE_FILE=$(find "${{ env.OUTPUT_DIR }}" -name "*.nupkg" | head -n 1)
+          PACKAGE_FILE=$(find "${{ env.OUTPUT_DIR }}" -name "*.nupkg" -print -quit)
           if [[ -z "$PACKAGE_FILE" ]]; then
-            echo "ERROR: No .nupkg file found in ${{ env.OUTPUT_DIR }}"
+            echo "ERROR: No .nupkg file found to test."
             exit 1
           fi
-          echo "package_path=$PACKAGE_FILE" >> $GITHUB_OUTPUT
-          echo "✅ Found package: $PACKAGE_FILE"
+          # Move the package into the local feed. We need its new path for the push step.
+          mv "$PACKAGE_FILE" "${{ env.LOCAL_FEED }}/"
+          PACKAGE_NAME=$(basename "$PACKAGE_FILE")
+          echo "package_path=${{ env.LOCAL_FEED }}/$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "✅ Package moved to local feed for testing."
+
+      - name: Create nuget.config for Local Testing
+        run: |
+          cat <<EOF > nuget.config
+          <?xml version="1.0" encoding="utf-8"?>
+          <configuration>
+            <packageSources>
+              <clear />
+              <add key="local-test-feed" value="${{ github.workspace }}/${{ env.LOCAL_FEED }}" />
+              <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+            </packageSources>
+            <config>
+              <add key="globalPackagesFolder" value=".nuget/packages" />
+            </config>
+          </configuration>
+          EOF
+          echo "✅ Created nuget.config to prioritize local package feed."
+          cat nuget.config
+
+      - name: Test Package with Demo Project
+        run: |
+          echo "--- Clearing NuGet cache to ensure a clean restore ---"
+          dotnet nuget locals all --clear
+          echo "--- Restoring and Building Demo Project ---"
+          dotnet build "${{ env.DEMO_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}"
+          echo "✅ Demo project built successfully, validating the new NuGet package."
 
       - name: Push to GitHub Packages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          dotnet nuget push "${{ steps.find_nupkg.outputs.package_path }}" \
+          dotnet nuget push "${{ steps.setup_feed.outputs.package_path }}" \
             --source "https://nuget.pkg.github.com/${{ github.repository_owner }}" \
             --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --skip-duplicate
