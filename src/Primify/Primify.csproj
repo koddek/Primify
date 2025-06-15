@@ -10,7 +10,7 @@
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-        <IncludeBuildOutput>false</IncludeBuildOutput> <!-- We'll include the output manually -->
+        <IncludeBuildOutput>true</IncludeBuildOutput> <!-- Keep this true to include referenced libraries -->
     </PropertyGroup>
 
     <PropertyGroup>
@@ -26,23 +26,12 @@
 
     <!-- Add project references -->
     <ItemGroup>
+        <!-- The attributes and converters are libraries for the consuming project. -->
         <ProjectReference Include="..\Primify.Attributes\Primify.Attributes.csproj" />
         <ProjectReference Include="..\Primify.Converters\Primify.Converters.csproj" />
+
+        <!-- The generator is included as an analyzer and its output is not directly referenced. -->
         <ProjectReference Include="..\Primify.Generator\Primify.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     </ItemGroup>
-
-    <!-- Package the generator as an analyzer -->
-    <ItemGroup>
-        <None Include="..\Primify.Generator\bin\$(Configuration)\netstandard2.0\Primify.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
-    </ItemGroup>
-
-    <!-- Include the converters assembly in the package -->
-    <Target Name="IncludeDependencies" BeforeTargets="GenerateNuspec">
-        <ItemGroup>
-            <_PackageFiles Include="$(OutputPath)Primify.Converters.dll">
-                <PackagePath>lib/$(TargetFramework)</PackagePath>
-            </_PackageFiles>
-        </ItemGroup>
-    </Target>
 
 </Project>
