@@ -18,7 +18,6 @@ public class StructEqualityTests
         var objectId = StructId.From(value);
 
         // Assert
-        Assert.NotNull(objectId);
         Assert.Equal(value, objectId.Value);
     }
 
@@ -32,7 +31,6 @@ public class StructEqualityTests
         var objectId = (StructId)value;
 
         // Assert
-        Assert.NotNull(objectId);
         Assert.Equal(value, objectId.Value);
     }
 

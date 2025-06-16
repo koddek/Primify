@@ -28,12 +28,23 @@ public sealed class WrapGenerator : IIncrementalGenerator
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         System.Diagnostics.Debugger.Launch(); // This will prompt you to attach a debugger
+
         // 1. Post-initialize the attribute source code
-        context.RegisterPostInitializationOutput(x =>
-        {
-            x.AddSource(Names.PrimifyAttGeneratedFilename,
-                SourceText.From(PrimifyAttributeSource, Encoding.UTF8));
-        });
+        // Check if the PrimifyAttribute already exists in the compilation
+        var attributeExists = context.CompilationProvider.Select((compilation, _) =>
+            compilation.GetTypeByMetadataName(Names.PrimifyAttFullNameT) != null);
+
+        // Only emit the attribute if it doesn't already exist
+        context.RegisterSourceOutput(
+            attributeExists,
+            (spc, exists) =>
+            {
+                if (!exists)
+                {
+                    spc.AddSource($"{Names.PrimifyAttGeneratedFilename}",
+                        SourceText.From(PrimifyAttributeSource, Encoding.UTF8));
+                }
+            });
 
         // 2. Define the type provider AFTER the attribute has been added to the compilation
         var typeProvider = context.SyntaxProvider

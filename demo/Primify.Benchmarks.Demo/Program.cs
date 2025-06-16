@@ -10,8 +10,8 @@ public class PrimifyBenchmarks
 {
     private const string RawValue = "testUser";
     private static readonly Username Wrapper = Username.From(RawValue);
-    private string _rawJson;
-    private string _wrapperJson;
+    private string _rawJson = string.Empty;
+    private string _wrapperJson  = string.Empty;
 
     [GlobalSetup]
     public void Setup()
@@ -36,7 +36,7 @@ public class PrimifyBenchmarks
     [Benchmark]
     public string Deserialize_Raw()
     {
-        return JsonSerializer.Deserialize<string>(_rawJson);
+        return JsonSerializer.Deserialize<string>(_rawJson)!;
     }
 
     [Benchmark]
