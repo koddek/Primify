@@ -1,6 +1,6 @@
 using Microsoft.CodeAnalysis;
 
-namespace Primify.Generator;
+namespace Primify.Generators;
 
 /// <summary>
 /// Contains all diagnostic descriptors used by the Primify generator.
@@ -8,14 +8,14 @@ namespace Primify.Generator;
 public static class Diagnostics
 {
     // Diagnostic categories
-    private const string WrapperGenerator = "Primify.Generator";
+    private const string WrapperGenerator = "Primify.Generators";
     private const string TypeValidation = "TypeValidation";
     private const string Usage = "Usage";
     private const string Validation = "Validation";
     private const string CodeGeneration = "CodeGeneration";
 
     #region Type Validation Diagnostics (PRITxxx)
-    
+
     /// <summary>
     /// Type must be a class, struct, or record.
     /// </summary>

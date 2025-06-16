@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace Primify.Generator;
+namespace Primify.Generators;
 
 internal sealed class TypeDeclarationWithDiagnostics(
     TypeDeclarationSyntax typeDeclaration,

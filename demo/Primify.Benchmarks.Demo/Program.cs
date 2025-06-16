@@ -1,9 +1,6 @@
 ﻿namespace Primify.Benchmarks.Demo;
 
-using Primify.Attributes;
-using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Running;
-
+using Attributes;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Running;
 using System.Text.Json;
