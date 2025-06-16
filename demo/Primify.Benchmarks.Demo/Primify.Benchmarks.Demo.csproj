@@ -8,21 +8,12 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <!-- This tells MSBuild to run the generator -->
-        <ProjectReference Include="..\..\src\Primify.Generator\Primify.Generator.csproj"
-                          OutputItemType="Analyzer"
-                          ReferenceOutputAssembly="false" />
-
-        <!--
-            ADD THESE LINES.
-            These give the sample project access to the types the generated code will use.
-        -->
-        <ProjectReference Include="..\..\src\Primify.Attributes\Primify.Attributes.csproj" />
-        <ProjectReference Include="..\..\src\Primify.Converters\Primify.Converters.csproj" />
+      <PackageReference Include="BenchmarkDotNet" Version="0.15.1" />
     </ItemGroup>
 
     <ItemGroup>
-      <PackageReference Include="BenchmarkDotNet" Version="0.15.1" />
+        <ProjectReference Include="..\..\src\Primify.Generators\Primify.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\..\src\Primify\Primify.csproj"/>
     </ItemGroup>
 
 </Project>

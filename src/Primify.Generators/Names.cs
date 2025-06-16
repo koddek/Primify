@@ -1,4 +1,4 @@
-namespace Primify.Generator;
+namespace Primify.Generators;
 
 public static class Names
 {
@@ -6,6 +6,7 @@ public static class Names
 
     internal const string PrimifyAttName = "Primify";
     internal const string PrimifyAttNameWithPostfix = $"{PrimifyAttName}Attribute";
+    internal const string PrimifyAttGeneratedFilename = $"{PrimifyAttNameWithPostfix}.g.cs";
     internal const string PrimifyAttFullName = $"{AttributesNamespace}.{PrimifyAttNameWithPostfix}";
 
     internal const string DefinedInstanceAttName = "Primify";
