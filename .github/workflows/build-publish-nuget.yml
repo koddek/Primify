@@ -49,13 +49,10 @@ jobs:
       - name: Create SNK file from secret
         run: echo "${{ secrets.SNK_FILE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/Primify.snk
 
-      - name: Install xmllint (for version extraction)
-        run: sudo apt-get update && sudo apt-get install -y libxml2-utils
-
       - name: Extract Version
         id: extract_version
         run: |
-          VERSION=$(xmllint --xpath 'string(/Project/PropertyGroup/Version)' ${{ env.MAIN_PROJECT_FILE }})
+          VERSION=$(grep '<Version>' ${{ env.MAIN_PROJECT_FILE }} | sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Extracted version: $VERSION"
 
@@ -64,18 +61,13 @@ jobs:
 
       - name: Pack Main Project
         run: |
-          mkdir -p "${{ env.OUTPUT_DIR }}"
+          # The pack step also creates the output directory
           dotnet pack "${{ env.MAIN_PROJECT_FILE }}" --configuration "${{ env.CONFIGURATION }}" --no-build -o "${{ env.OUTPUT_DIR }}"
 
       - name: Push to GitHub Packages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          PACKAGE_FILE=$(find "${{ env.OUTPUT_DIR }}" -name "*.nupkg" -print -quit)
-          if [[ -z "$PACKAGE_FILE" ]]; then
-            echo "ERROR: No .nupkg file found to publish."
-            exit 1
-          fi
-          dotnet nuget push "$PACKAGE_FILE" \
+          dotnet nuget push "${{ env.OUTPUT_DIR }}/*.nupkg" \
             --source "https://nuget.pkg.github.com/${{ github.repository_owner }}" \
             --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --skip-duplicate
@@ -93,11 +85,11 @@ jobs:
             echo "tag_exists=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create Git Tag
+      - name: Create and Push Git Tag
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_tag.outputs.tag_exists == 'false'
         run: |
           VERSION=${{ steps.extract_version.outputs.version }}
-          git config user.email "actions@github.com"
-          git config user.name "GitHub Actions"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v$VERSION" -m "Release v$VERSION"
           git push origin "v$VERSION"
