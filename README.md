@@ -1,7 +1,7 @@
 # Primify
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/koddek/Primify/build-publish-nuget.yml?branch=main&style=flat-square)](https://github.com/koddek/Primify/actions/workflows/build-publish-nuget.yml)
-[![NuGet](https://img.shields.io/nuget/v/Primify.svg?style=flat-square)](https://www.nuget.org/packages/Primify/)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/koddek/Primify/build-publish-nuget.yml?branch=main&style=for-the-badge)](https://github.com/koddek/Primify/actions/workflows/build-publish-nuget.yml)
+[![NuGet Version](https://img.shields.io/github/package-json/v/koddek/Primify/Primify?label=NuGet&style=for-the-badge)](https://github.com/koddek/Primify/pkgs/nuget/Primify)
 [![License](https://img.shields.io/github/license/koddek/Primify?style=flat-square)](LICENSE)
 
 **Primify** is a high-performance C# source generator that creates strongly-typed, boilerplate-free wrappers for
