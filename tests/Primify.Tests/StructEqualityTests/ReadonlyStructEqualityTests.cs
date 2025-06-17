@@ -16,7 +16,6 @@ public class ReadonlyStructEqualityTests
         var objectId = ReadonlyStructId.From(value);
 
         // Assert
-        Assert.NotNull(objectId);
         Assert.Equal(value, objectId.Value);
     }
 
@@ -30,7 +29,6 @@ public class ReadonlyStructEqualityTests
         var objectId = (ReadonlyStructId)value;
 
         // Assert
-        Assert.NotNull(objectId);
         Assert.Equal(value, objectId.Value);
     }
 

@@ -93,9 +93,9 @@ public static class Diagnostics
     public static readonly DiagnosticDescriptor ImplementationGuidance = new(
         id: "PRIU003",
         title: "Implementation Guidance",
-        messageFormat: "For type '{0}':\n" +
-                     "• Add predefined values with [PredefinedInstance] on static partial properties\n" +
-                     "• Implement 'private static partial bool Validate({0} value)' for custom validation\n" +
+        messageFormat: "For type '{0}':" +
+                     "• Add predefined values using getter only static properties assigned with the private constructor." +
+                     "• Implement 'private static partial bool Validate({0} value)' for custom validation" +
                      "• Implement 'private static partial {0} Normalize({0} value)' for value normalization",
         category: Usage,
         defaultSeverity: DiagnosticSeverity.Info,

@@ -16,7 +16,6 @@ public class RecordStructEqualityTests
         var objectId = RecordStructId.From(value);
 
         // Assert
-        Assert.NotNull(objectId);
         Assert.Equal(value, objectId.Value);
     }
 
@@ -30,7 +29,6 @@ public class RecordStructEqualityTests
         var objectId = (RecordStructId)value;
 
         // Assert
-        Assert.NotNull(objectId);
         Assert.Equal(value, objectId.Value);
     }
 
