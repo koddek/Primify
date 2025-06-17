@@ -3,10 +3,9 @@
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
         <IsPackable>false</IsPackable>
-        <Nullable>enable</Nullable>
-        <LangVersion>latest</LangVersion>
         <IsRoslynComponent>true</IsRoslynComponent>
         <RootNamespace>Primify.Generators</RootNamespace>
+
         <IncludeBuildOutput>false</IncludeBuildOutput>
         <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>

@@ -11,16 +11,14 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="LiteDB" Version="5.0.21" />
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-        <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3" />
+        <PackageReference Include="LiteDB" Version="5.0.21"/>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
+        <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3"/>
     </ItemGroup>
 
     <ItemGroup>
-        <!-- Reference the generator project for local development -->
-        <ProjectReference Include="..\Primify.Generators\Primify.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
-        <!-- Include the generator in the package -->
-        <None Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\Primify.Generators.dll" Pack="true" PackagePath="analyzers\dotnet\cs\Primify.Generators.dll" Visible="false" />
+        <ProjectReference Include="..\Primify.Generators\Primify.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
+        <None Include="$(MSBuildProjectDirectory)\..\Primify.Generators\bin\$(Configuration)\netstandard2.0\Primify.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
     </ItemGroup>
 
 </Project>
