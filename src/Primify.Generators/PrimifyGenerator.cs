@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.Text;
 namespace Primify.Generators;
 
 [Generator(LanguageNames.CSharp)]
-public sealed class WrapGenerator : IIncrementalGenerator
+public sealed class PrimifyGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -183,7 +183,7 @@ public sealed class WrapGenerator : IIncrementalGenerator
             var finalModifier = isValueType ? "readonly" : "sealed";
 
             var equalityMembers = GenerateEqualityMembers(wrapperName, wrapperArgument, isRecord, isValueType);
-            var toStringOverride = GenerateToStringOverride(wrapperName);
+            var toStringOverride = GenerateToStringOverride();
             var liteDbInitializer = GenerateLiteDbInitializer(wrapperName, wrapperArgument);
             var implicitCasting = GenerateImplicitCasting(wrapperName, wrapperArgument);
             var explicitCasting = GenerateExplicitCasting(wrapperName, wrapperArgument);
@@ -309,14 +309,13 @@ public sealed class WrapGenerator : IIncrementalGenerator
                  """;
     }
 
-    private static string GenerateToStringOverride(string name) =>
-        $$$"""
-               /// <summary>
-               /// Returns a string representation of the wrapper, focusing only on the Value property.
-               /// Example: "{{{name}}} { Value = 123 }".
-               /// </summary>
-               public override string ToString() => $"{nameof({{{name}}})} {{ Value = {Value} }}";
-           """;
+    private static string GenerateToStringOverride() =>
+        """
+            /// <summary>
+            /// Returns the string representation of the wrapped value.
+            /// </summary>
+            public override string ToString() => Value.ToString();
+        """;
 
     private static string GenerateExplicitCasting(string name, string argument) =>
         $"""

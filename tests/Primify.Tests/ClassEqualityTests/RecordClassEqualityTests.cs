@@ -57,7 +57,7 @@ public class RecordClassEqualityTests
     {
         // Arrange
         var objectId = RecordClassId.From(123);
-        var expectedString = $"{nameof(RecordClassId)} {{ Value = 123 }}";
+        var expectedString = "123";
 
         // Act
         var result = objectId.ToString();

@@ -57,7 +57,7 @@ public class StructEqualityTests
     {
         // Arrange
         var objectId = StructId.From(123);
-        var expectedString = $"{nameof(StructId)} {{ Value = 123 }}";
+        var expectedString = "123";
 
         // Act
         var result = objectId.ToString();

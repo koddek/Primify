@@ -59,7 +59,7 @@ public class ClassEqualityTests
     {
         // Arrange
         var objectId = ClassId.From(123);
-        var expectedString = $"{nameof(ClassId)} {{ Value = 123 }}";
+        var expectedString = "123";
 
         // Act
         var result = objectId.ToString();

@@ -57,7 +57,7 @@ public class SealedRecordClassEqualityTests
     {
         // Arrange
         var objectId = SealedRecordClassId.From(123);
-        var expectedString = $"{nameof(SealedRecordClassId)} {{ Value = 123 }}";
+        var expectedString = "123";
 
         // Act
         var result = objectId.ToString();
