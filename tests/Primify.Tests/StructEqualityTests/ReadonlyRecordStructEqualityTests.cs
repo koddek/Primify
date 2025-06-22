@@ -56,7 +56,7 @@ public class ReadonlyRecordStructEqualityTests
     {
         // Arrange
         var objectId = ReadonlyRecordStructId.From(123);
-        var expectedString = $"{nameof(ReadonlyRecordStructId)} {{ Value = 123 }}";
+        var expectedString = "123";
 
         // Act
         var result = objectId.ToString();

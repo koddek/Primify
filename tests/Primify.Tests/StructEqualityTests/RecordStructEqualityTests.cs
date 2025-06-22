@@ -55,7 +55,7 @@ public class RecordStructEqualityTests
     {
         // Arrange
         var objectId = RecordStructId.From(123);
-        var expectedString = $"{nameof(RecordStructId)} {{ Value = 123 }}";
+        var expectedString = "123";
 
         // Act
         var result = objectId.ToString();
