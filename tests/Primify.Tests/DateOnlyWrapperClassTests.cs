@@ -15,8 +15,34 @@ public partial class DateOnlyPrimowrapClassWithPredefinedProperty
     public static DateOnlyPrimowrapClassWithPredefinedProperty Empty => new(DateOnly.MinValue);
 }
 
+[Primify<DateOnly>]
+public partial record struct DateOnlyId;
+
+public class Foo
+{
+    public DateOnlyId Id { get; set; }
+}
+
 public class DateOnlyWrapperClassTests(ITestOutputHelper testOutputHelper)
 {
+    [Fact]
+    public void DateOnly_ReadWrite_ForLiteDb()
+    {
+        using var db = new LiteDatabase(":memory:");
+        var collection = db.GetCollection<Foo>();
+
+        var foo = new Foo()
+        {
+            Id = DateOnlyId.From(DateOnly.MaxValue)
+        };
+
+        var insert = collection.Insert(foo);
+
+        var result = collection.FindById(foo.Id);
+
+        Assert.Equal(foo.Id, result.Id);
+    }
+
     [Fact]
     public void DateOnlyWrapperClass_CreatesType_WhenFromIsCalled()
     {

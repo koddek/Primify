@@ -1,56 +1,56 @@
 namespace Primify.Generator.Tests;
 
-[Primify<DateTimeOffset>]
-public partial class DateTimeOffsetPrimowrapClass;
+[Primify<TimeOnly>]
+public partial class TimeOnlyPrimowrapClass;
 
-// [Primify<DateTimeOffset>]
-// public partial class DateTimeOffsetWrapperClassWithNormalize
+// [Primify<TimeOnly>]
+// public partial class TimeOnlyWrapperClassWithNormalize
 // {
-//     private static DateTimeOffset Normalize(DateTimeOffset value) => value < 1 ? -1 : value;
+//     private static TimeOnly Normalize(TimeOnly value) => value < 1 ? -1 : value;
 // }
 
-[Primify<DateTimeOffset>]
-public partial class DateTimeOffsetPrimowrapClassWithPredefinedProperty
+[Primify<TimeOnly>]
+public partial class TimeOnlyPrimowrapClassWithPredefinedProperty
 {
-    public static DateTimeOffsetPrimowrapClassWithPredefinedProperty Empty => new(DateTimeOffset.MinValue);
+    public static TimeOnlyPrimowrapClassWithPredefinedProperty Empty => new(TimeOnly.MinValue);
 }
 
-[Primify<DateTimeOffset>]
-public partial record struct DateTimeOffsetId;
+[Primify<TimeOnly>]
+public partial record struct TimeOnlyId;
 
-public class DateTimeOffsetFoo
+public class TimeOnlyFoo
 {
-    public DateTimeOffsetId Id { get; set; }
+    public TimeOnlyId Id { get; set; }
 }
 
-public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
+public class TimeOnlyWrapperTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    public void DateTimeOffset_ReadWrite_ForLiteDb()
+    public void TimeOnly_ReadWrite_ForLiteDb()
     {
         using var db = new LiteDatabase(":memory:");
-        var collection = db.GetCollection<DateTimeOffsetFoo>();
+        var collection = db.GetCollection<TimeOnlyFoo>();
 
-        var foo = new DateTimeOffsetFoo()
+        var foo = new TimeOnlyFoo()
         {
-            Id = DateTimeOffsetId.From(DateTimeOffset.UtcNow)
+            Id = TimeOnlyId.From(TimeOnly.MaxValue)
         };
 
         var insert = collection.Insert(foo);
 
         var result = collection.FindById(foo.Id);
 
-        Assert.Equal(foo.Id.ToString(), result.Id.ToString());
+        Assert.Equal(foo.Id, result.Id);
     }
 
     [Fact]
-    public void DateTimeOffsetWrapperClass_CreatesType_WhenFromIsCalled()
+    public void TimeOnlyWrapperClass_CreatesType_WhenFromIsCalled()
     {
         // Arrange
-        var expectedValue = DateTimeOffset.MinValue;
+        var expectedValue = TimeOnly.MinValue;
 
         // Act
-        var result = DateTimeOffsetPrimowrapClass.From(expectedValue);
+        var result = TimeOnlyPrimowrapClass.From(expectedValue);
         testOutputHelper.WriteLine(result.ToString());
 
         // Assert
@@ -59,12 +59,12 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void DateTimeOffsetWrapperClass_CreatesType_WhenExplicitlyCastToFromType()
+    public void TimeOnlyWrapperClass_CreatesType_WhenExplicitlyCastToFromType()
     {
-        var expectedValue = DateTimeOffset.MinValue;
+        var expectedValue = TimeOnly.MinValue;
 
-        var result1 = (DateTimeOffsetPrimowrapClass)expectedValue;
-        var result2 = (DateTimeOffset)result1;
+        var result1 = (TimeOnlyPrimowrapClass)expectedValue;
+        var result2 = (TimeOnly)result1;
         testOutputHelper.WriteLine(result1.ToString());
 
         Assert.Equal(expectedValue, result1.Value);
@@ -78,19 +78,19 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
     // [InlineData(0, -1)]
     // [InlineData(-1, -1)]
     // [InlineData(-100, -1)]
-    // public void DateTimeOffsetWrapperClassWithNormalize_ReturnsNormalizedValue_WhenCalledWithNonNormalizedValue(int value, int expected)
+    // public void TimeOnlyWrapperClassWithNormalize_ReturnsNormalizedValue_WhenCalledWithNonNormalizedValue(int value, int expected)
     // {
-    //     var result = DateTimeOffsetWrapperClassWithNormalize.From(value);
+    //     var result = TimeOnlyWrapperClassWithNormalize.From(value);
     //     testOutputHelper.WriteLine(result.ToString());
     //
     //     Assert.Equal(expected, result.Value);
     // }
 
     [Fact]
-    public void DateTimeOffsetWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedWithSystemTextJsonV1()
+    public void TimeOnlyWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedWithSystemTextJsonV1()
     {
-        var expectedValue = DateTimeOffset.Now;
-        var result = DateTimeOffsetPrimowrapClassWithPredefinedProperty.From(expectedValue);
+        var expectedValue = TimeOnly.MaxValue;
+        var result = TimeOnlyPrimowrapClassWithPredefinedProperty.From(expectedValue);
 
         // Default value to string
         testOutputHelper.WriteLine("result.Value:");
@@ -105,17 +105,17 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
 
         // System.Text.Json deserialization
         var stjDeserialized =
-            System.Text.Json.JsonSerializer.Deserialize<DateTimeOffsetPrimowrapClassWithPredefinedProperty>(json);
+            System.Text.Json.JsonSerializer.Deserialize<TimeOnlyPrimowrapClassWithPredefinedProperty>(json);
         testOutputHelper.WriteLine("\nSystem.Text.Json deserialized value:");
         testOutputHelper.WriteLine(stjDeserialized?.ToString() ?? "null");
         Assert.Equal(expectedValue, stjDeserialized?.Value);
     }
 
     [Fact]
-    public void DateTimeOffsetWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedWithSystemTextJson()
+    public void TimeOnlyWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedWithSystemTextJson()
     {
-        var expectedValue = DateTimeOffset.MinValue;
-        var result = DateTimeOffsetPrimowrapClassWithPredefinedProperty.Empty;
+        var expectedValue = TimeOnly.MinValue;
+        var result = TimeOnlyPrimowrapClassWithPredefinedProperty.Empty;
 
         // Default value to string
         testOutputHelper.WriteLine("result.Value:");
@@ -130,17 +130,17 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
 
         // System.Text.Json deserialization
         var stjDeserialized =
-            System.Text.Json.JsonSerializer.Deserialize<DateTimeOffsetPrimowrapClassWithPredefinedProperty>(json);
+            System.Text.Json.JsonSerializer.Deserialize<TimeOnlyPrimowrapClassWithPredefinedProperty>(json);
         testOutputHelper.WriteLine("\nSystem.Text.Json deserialized value:");
         testOutputHelper.WriteLine(stjDeserialized?.ToString() ?? "null");
         Assert.Equal(expectedValue, stjDeserialized?.Value);
     }
 
     [Fact]
-    public void DateTimeOffsetWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftJsonV1()
+    public void TimeOnlyWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftJsonV1()
     {
-        var expectedValue = DateTimeOffset.Now;
-        var result = DateTimeOffsetPrimowrapClassWithPredefinedProperty.From(expectedValue);
+        var expectedValue = TimeOnly.MaxValue;
+        var result = TimeOnlyPrimowrapClassWithPredefinedProperty.From(expectedValue);
 
         // Default value to string
         testOutputHelper.WriteLine("result.Value:");
@@ -155,7 +155,7 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
 
         // Newtonsoft.Json deserialization
         var njsDeserialized =
-            Newtonsoft.Json.JsonConvert.DeserializeObject<DateTimeOffsetPrimowrapClassWithPredefinedProperty>(
+            Newtonsoft.Json.JsonConvert.DeserializeObject<TimeOnlyPrimowrapClassWithPredefinedProperty>(
                 newtonsoftJson);
         testOutputHelper.WriteLine("\nNewtonsoft.Json deserialized value:");
         testOutputHelper.WriteLine(njsDeserialized?.ToString() ?? "null");
@@ -163,10 +163,10 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void DateTimeOffsetWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftJson()
+    public void TimeOnlyWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftJson()
     {
-        var expectedValue = DateTimeOffset.MinValue;
-        var result = DateTimeOffsetPrimowrapClassWithPredefinedProperty.From(expectedValue);
+        var expectedValue = TimeOnly.MinValue;
+        var result = TimeOnlyPrimowrapClassWithPredefinedProperty.From(expectedValue);
 
         // Default value to string
         testOutputHelper.WriteLine("result.Value:");
@@ -181,7 +181,7 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
 
         // Newtonsoft.Json deserialization
         var njsDeserialized =
-            Newtonsoft.Json.JsonConvert.DeserializeObject<DateTimeOffsetPrimowrapClassWithPredefinedProperty>(
+            Newtonsoft.Json.JsonConvert.DeserializeObject<TimeOnlyPrimowrapClassWithPredefinedProperty>(
                 newtonsoftJson);
         testOutputHelper.WriteLine("\nNewtonsoft.Json deserialized value:");
         testOutputHelper.WriteLine(njsDeserialized?.ToString() ?? "null");
@@ -189,10 +189,10 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void DateTimeOffsetWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftBsonV1()
+    public void TimeOnlyWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftBsonV1()
     {
-        var expectedValue = DateTimeOffset.UtcNow;
-        var result = DateTimeOffsetPrimowrapClassWithPredefinedProperty.From(expectedValue);
+        var expectedValue = TimeOnly.MaxValue;
+        var result = TimeOnlyPrimowrapClassWithPredefinedProperty.From(expectedValue);
 
         // Default value to string
         testOutputHelper.WriteLine("result.Value:");
@@ -218,22 +218,22 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
         using (var reader = new Newtonsoft.Json.Bson.BsonDataReader(ms2))
         {
             var serializer = new Newtonsoft.Json.JsonSerializer();
-            var bsonDeserialized = serializer.Deserialize<DateTimeOffsetPrimowrapClassWithPredefinedProperty>(reader);
+            var bsonDeserialized = serializer.Deserialize<TimeOnlyPrimowrapClassWithPredefinedProperty>(reader);
             testOutputHelper.WriteLine("\nBSON deserialized value:");
             testOutputHelper.WriteLine(bsonDeserialized?.ToString() ?? "null");
 
             // Compare the underlying DateTime values directly to avoid timezone/offset issues
-            var expectedDateTime = expectedValue.UtcDateTime;
-            var actualDateTime = bsonDeserialized?.Value.UtcDateTime;
+            var expectedDateTime = expectedValue;
+            var actualDateTime = bsonDeserialized?.Value;
             Assert.Equal(expectedDateTime.ToString(), actualDateTime.Value.ToString());
         }
     }
 
     [Fact]
-    public void DateTimeOffsetWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftBsonV3()
+    public void TimeOnlyWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftBsonV3()
     {
-        var expectedValue = DateTimeOffset.UtcNow;
-        var result = DateTimeOffsetPrimowrapClassWithPredefinedProperty.From(expectedValue);
+        var expectedValue = TimeOnly.MaxValue;
+        var result = TimeOnlyPrimowrapClassWithPredefinedProperty.From(expectedValue);
 
         testOutputHelper.WriteLine($"Original Expected: {expectedValue:o}");
         Assert.Equal(expectedValue, result.Value);
@@ -253,7 +253,7 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
         using (var reader = new Newtonsoft.Json.Bson.BsonDataReader(ms2))
         {
             var serializer = new Newtonsoft.Json.JsonSerializer();
-            var bsonDeserialized = serializer.Deserialize<DateTimeOffsetPrimowrapClassWithPredefinedProperty>(reader);
+            var bsonDeserialized = serializer.Deserialize<TimeOnlyPrimowrapClassWithPredefinedProperty>(reader);
 
             testOutputHelper.WriteLine($"Deserialized Actual: {bsonDeserialized?.Value:o}");
 
@@ -262,25 +262,25 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
             // to match the precision of the actual value before comparing.
 
             // 1. Get the Ticks of the original UTC DateTime
-            long originalTicks = expectedValue.UtcTicks;
+            long originalTicks = expectedValue.Ticks;
 
             // 2. Truncate the ticks to the nearest millisecond
             long truncatedTicks = originalTicks - (originalTicks % TimeSpan.TicksPerMillisecond);
 
-            // 3. Create a new DateTimeOffset with the truncated value for comparison
-            var expectedValueTruncated = new DateTimeOffset(truncatedTicks, TimeSpan.Zero);
+            // 3. Create a new TimeOnly with the truncated value for comparison
+            var expectedValueTruncated = TimeOnly.FromDateTime(new DateTime(truncatedTicks));
 
-            testOutputHelper.WriteLine($"Truncated Expected:  {expectedValueTruncated:o}");
+            testOutputHelper.WriteLine($"Truncated Expected:  {expectedValueTruncated}");
 
-            Assert.Equal(expectedValueTruncated, bsonDeserialized?.Value);
+            Assert.Equal(expectedValueTruncated.ToString(), bsonDeserialized?.Value.ToString());
         }
     }
 
     [Fact]
-    public void DateTimeOffsetWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftBson()
+    public void TimeOnlyWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftBson()
     {
-        var expectedValue = DateTimeOffset.MinValue;
-        var result = DateTimeOffsetPrimowrapClassWithPredefinedProperty.From(expectedValue);
+        var expectedValue = TimeOnly.MinValue;
+        var result = TimeOnlyPrimowrapClassWithPredefinedProperty.From(expectedValue);
 
         // Default value to string
         testOutputHelper.WriteLine("result.Value:");
@@ -306,22 +306,22 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
         using (var reader = new Newtonsoft.Json.Bson.BsonDataReader(ms2))
         {
             var serializer = new Newtonsoft.Json.JsonSerializer();
-            var bsonDeserialized = serializer.Deserialize<DateTimeOffsetPrimowrapClassWithPredefinedProperty>(reader);
+            var bsonDeserialized = serializer.Deserialize<TimeOnlyPrimowrapClassWithPredefinedProperty>(reader);
             testOutputHelper.WriteLine("\nBSON deserialized value:");
             testOutputHelper.WriteLine(bsonDeserialized?.ToString() ?? "null");
 
             // Compare the underlying DateTime values directly to avoid timezone/offset issues
-            var expectedDateTime = expectedValue.UtcDateTime;
-            var actualDateTime = bsonDeserialized?.Value.UtcDateTime;
+            var expectedDateTime = expectedValue;
+            var actualDateTime = bsonDeserialized?.Value;
             Assert.Equal(expectedDateTime, actualDateTime);
         }
     }
 
     [Fact]
-    public void DateTimeOffsetWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftBsonV2()
+    public void TimeOnlyWrapperClassWithPredefinedProperty_IgnoresReadonly_WhenSerializedNewtonsoftBsonV2()
     {
-        var expectedValue = DateTimeOffset.MinValue;
-        var result = DateTimeOffsetPrimowrapClassWithPredefinedProperty.From(expectedValue);
+        var expectedValue = TimeOnly.MinValue;
+        var result = TimeOnlyPrimowrapClassWithPredefinedProperty.From(expectedValue);
 
         // Default value to string
         testOutputHelper.WriteLine("result.Value:");
@@ -355,7 +355,7 @@ public class DateTimeOffsetWrapperClassTests(ITestOutputHelper testOutputHelper)
             // Ensure the reader also respects the UTC setting
             reader.DateTimeKindHandling = System.DateTimeKind.Utc;
 
-            var bsonDeserialized = serializer.Deserialize<DateTimeOffsetPrimowrapClassWithPredefinedProperty>(reader);
+            var bsonDeserialized = serializer.Deserialize<TimeOnlyPrimowrapClassWithPredefinedProperty>(reader);
             testOutputHelper.WriteLine("\nBSON deserialized value:");
             testOutputHelper.WriteLine(bsonDeserialized?.Value.ToString("o") ?? "null");
 

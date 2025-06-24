@@ -3,7 +3,7 @@
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.4.22</Version>
+        <Version>1.4.23</Version>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
