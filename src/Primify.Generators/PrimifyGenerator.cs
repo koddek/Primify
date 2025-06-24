@@ -323,36 +323,134 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
              public static explicit operator {argument}({name} value) => value.Value;
          """;
 
-    private static string GenerateImplicitCasting(string name, string argument) =>
-        $"""
-             // Casting for BSON
-             public static implicit operator LiteDB.BsonValue({name} value) =>
-                 new LiteDB.BsonValue(value.Value);
-             public static implicit operator {name}(LiteDB.BsonValue value) =>
-                 From(({argument})System.Convert.ChangeType(value.RawValue, typeof({argument})));
-         """;
+    private static string GenerateImplicitCasting(string name, string argument)
+    {
+        string toBson;
+        // We will generate the "from BsonValue" part differently based on complexity.
+        string fromBsonImplementation;
 
-    private static string GenerateLiteDbInitializer(string name, string argument) =>
-        $$"""
-          /// <summary>
-          /// Automatically registers the LiteDB BSON mapper for the {{name}} type.
-          /// </summary>
-          file static class {{name}}LiteDbInitializer
-          {
-              [ModuleInitializer]
-              internal static void Register()
-              {
-                  BsonMapper.Global.RegisterType<{{name}}>(
-                      serialize: wrapper => new LiteDB.BsonValue(wrapper.Value),
-                      deserialize: bson =>
-                      {
-                          var rawValue = bson.RawValue;
-                          var typedValue = ({{argument}})System.Convert.ChangeType(rawValue, typeof({{argument}}));
-                          
-                          return {{name}}.From(typedValue);
-                      }
-                  );
-              }
-          }
-          """;
+        switch (argument)
+        {
+            case "System.DateOnly":
+                toBson = "new LiteDB.BsonValue(value.Value.ToDateTime(System.TimeOnly.MinValue))";
+                fromBsonImplementation = $"=> {name}.From(System.DateOnly.FromDateTime(value.AsDateTime));";
+                break;
+
+            case "System.TimeOnly":
+                toBson = "new LiteDB.BsonValue(value.Value.Ticks)";
+                fromBsonImplementation = $"=> {name}.From(new System.TimeOnly(value.AsInt64));";
+                break;
+
+            case "System.DateTimeOffset":
+                // Create a BsonDocument for serialization
+                toBson = """
+                             new LiteDB.BsonDocument
+                             {
+                                 ["DateTime"] = value.Value.UtcDateTime,
+                                 ["Offset"] = value.Value.Offset.Ticks
+                             }
+                         """;
+
+                // Generate a full method body for deserialization
+                fromBsonImplementation = $$"""
+                                           {
+                                               var doc = value.AsDocument;
+                                               var utcDateTime = doc["DateTime"].AsDateTime;
+                                               var offset = new System.TimeSpan(doc["Offset"].AsInt64);
+
+                                               // Create a UTC DateTimeOffset first, then convert to the original offset
+                                               var utcTime = new System.DateTimeOffset(utcDateTime);
+                                               var originalTime = utcTime.ToOffset(offset);
+
+                                               return {{name}}.From(originalTime);
+                                           }
+                                           """;
+                break;
+
+            default:
+                toBson = "new LiteDB.BsonValue(value.Value)";
+                fromBsonImplementation =
+                    $"=> {name}.From(({argument})System.Convert.ChangeType(value.RawValue, typeof({argument})));";
+                break;
+        }
+
+        return $"""
+                    // Casting for BSON
+                    public static implicit operator LiteDB.BsonValue({name} value) =>
+                        {toBson};
+
+                    public static implicit operator {name}(LiteDB.BsonValue value)
+                        {fromBsonImplementation}
+                """;
+    }
+
+    private static string GenerateLiteDbInitializer(string name, string argument)
+    {
+        string serializeCode;
+        string deserializeCode;
+
+        switch (argument)
+        {
+            case "System.DateOnly":
+                serializeCode = "wrapper => new LiteDB.BsonValue(wrapper.Value.ToDateTime(System.TimeOnly.MinValue))";
+                deserializeCode = $"bson => {name}.From(System.DateOnly.FromDateTime(bson.AsDateTime))";
+                break;
+
+            case "System.TimeOnly":
+                serializeCode = "wrapper => new LiteDB.BsonValue(wrapper.Value.Ticks)";
+                deserializeCode = $"bson => {name}.From(new System.TimeOnly(bson.AsInt64))";
+                break;
+
+            case "System.DateTimeOffset":
+                serializeCode = """
+                                wrapper =>
+                                            new LiteDB.BsonDocument
+                                            {
+                                                ["DateTime"] = wrapper.Value.UtcDateTime,
+                                                ["Offset"] = wrapper.Value.Offset.Ticks
+                                            }
+                                """;
+
+                deserializeCode = $$"""
+                                    bson => 
+                                                {
+                                                    var doc = bson.AsDocument;
+                                                    var utcDateTime = doc["DateTime"].AsDateTime;
+                                                    var offset = new System.TimeSpan(doc["Offset"].AsInt64);
+
+                                                    // 1. Create a DateTimeOffset from the UTC time (its offset will be zero).
+                                                    var utcTime = new System.DateTimeOffset(utcDateTime);
+
+                                                    // 2. Convert it to the original offset.
+                                                    var originalTime = utcTime.ToOffset(offset);
+
+                                                    return {{name}}.From(originalTime);
+                                                }
+                                    """;
+                break;
+
+            default:
+                serializeCode = "wrapper => new LiteDB.BsonValue(wrapper.Value)";
+                deserializeCode =
+                    $"bson => {name}.From(({argument})System.Convert.ChangeType(bson.RawValue, typeof({argument})))";
+                break;
+        }
+
+        return $$"""
+                 /// <summary>
+                 /// Automatically registers the LiteDB BSON mapper for the {{name}} type.
+                 /// </summary>
+                 file static class {{name}}LiteDbInitializer
+                 {
+                     [System.Runtime.CompilerServices.ModuleInitializer]
+                     internal static void Register()
+                     {
+                         LiteDB.BsonMapper.Global.RegisterType<{{name}}>(
+                             serialize: {{serializeCode}},
+                             deserialize: {{deserializeCode}}
+                         );
+                     }
+                 }
+                 """;
+    }
 }
