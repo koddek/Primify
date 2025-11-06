@@ -3,14 +3,14 @@
     <PropertyGroup>
         <TargetFramework>net9.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.4.23</Version>
+        <Version>1.5.0</Version>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="LiteDB" Version="5.0.21"/>
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.3"/>
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
         <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3"/>
     </ItemGroup>
 

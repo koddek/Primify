@@ -186,7 +186,7 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             var toStringOverride = GenerateToStringOverride();
             var liteDbInitializer = GenerateLiteDbInitializer(wrapperName, wrapperArgument);
             var implicitCasting = GenerateImplicitCasting(wrapperName, wrapperArgument);
-            var explicitCasting = GenerateExplicitCasting(wrapperName, wrapperArgument);
+            var implicitExplicitCasting = GenerateImplicitExplicitCasting(wrapperName, wrapperArgument);
 
             // Build up the source code
             var code = $$"""
@@ -226,7 +226,7 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
                              
                          {{implicitCasting}}
 
-                         {{explicitCasting}}
+                         {{implicitExplicitCasting}}
                              
                          {{toStringOverride}}
 
@@ -317,10 +317,10 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             public override string ToString() => Value.ToString();
         """;
 
-    private static string GenerateExplicitCasting(string name, string argument) =>
+    private static string GenerateImplicitExplicitCasting(string name, string argument) =>
         $"""
-             public static explicit operator {name}({argument} value) => From(value);
-             public static explicit operator {argument}({name} value) => value.Value;
+             public static implicit operator {name}({argument} value) => From(value);
+             public static implicit operator {argument}({name} value) => value.Value;
          """;
 
     private static string GenerateImplicitCasting(string name, string argument)
@@ -376,11 +376,9 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
 
         return $"""
                     // Casting for BSON
-                    public static implicit operator LiteDB.BsonValue({name} value) =>
-                        {toBson};
+                    public static implicit operator LiteDB.BsonValue({name} value) => {toBson};
 
-                    public static implicit operator {name}(LiteDB.BsonValue value)
-                        {fromBsonImplementation}
+                    public static implicit operator {name}(LiteDB.BsonValue value) {fromBsonImplementation}
                 """;
     }
 
