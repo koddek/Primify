@@ -35,6 +35,37 @@ public class Class1Tests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void Class1_SuccessfullyConverts_WhenSetImplicitly()
+    {
+        // Arrange
+        int expectedValue = 1001;
+
+        // Act
+        Class1 result = expectedValue;
+        testOutputHelper.WriteLine(result.ToString());
+
+        // Assert
+        Assert.Equal(expectedValue, result.Value);
+        Assert.Equal(expectedValue, result.Value);
+    }
+
+    [Fact]
+    public void Class1_SuccessfullyConverts_WhenDereferencedImplicitly()
+    {
+        // Arrange
+        int expectedValue = 1001;
+        var input = Class1.From(expectedValue);
+
+        // Act
+        int result = input;
+        testOutputHelper.WriteLine(result.ToString());
+
+        // Assert
+        Assert.Equal(expectedValue, result);
+        Assert.Equal(expectedValue, result);
+    }
+
+    [Fact]
     public void Class1_CreatesType_WhenExplicitlyCastToFromType()
     {
         int expectedValue = 1001;
@@ -74,16 +105,16 @@ public class Class1Tests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(expectedValue, result.Value);
 
-         // System.Text.Json serialization
-         var json = JsonSerializer.Serialize(result);
-         testOutputHelper.WriteLine("\nSystem.Text.Json serialization:");
-         testOutputHelper.WriteLine(json);
+        // System.Text.Json serialization
+        var json = JsonSerializer.Serialize(result);
+        testOutputHelper.WriteLine("\nSystem.Text.Json serialization:");
+        testOutputHelper.WriteLine(json);
 
-         // System.Text.Json deserialization
-         var stjDeserialized = JsonSerializer.Deserialize<Class1WithPredefinedProperty>(json);
-         testOutputHelper.WriteLine("\nSystem.Text.Json deserialized value:");
-         testOutputHelper.WriteLine(stjDeserialized?.ToString() ?? "null");
-         Assert.Equal(expectedValue, stjDeserialized?.Value);
+        // System.Text.Json deserialization
+        var stjDeserialized = JsonSerializer.Deserialize<Class1WithPredefinedProperty>(json);
+        testOutputHelper.WriteLine("\nSystem.Text.Json deserialized value:");
+        testOutputHelper.WriteLine(stjDeserialized?.ToString() ?? "null");
+        Assert.Equal(expectedValue, stjDeserialized?.Value);
     }
 
     [Fact]
@@ -104,7 +135,8 @@ public class Class1Tests(ITestOutputHelper testOutputHelper)
         testOutputHelper.WriteLine(newtonsoftJson);
 
         // Newtonsoft.Json deserialization
-        var njsDeserialized = Newtonsoft.Json.JsonConvert.DeserializeObject<Class1WithPredefinedProperty>(newtonsoftJson);
+        var njsDeserialized =
+            Newtonsoft.Json.JsonConvert.DeserializeObject<Class1WithPredefinedProperty>(newtonsoftJson);
         testOutputHelper.WriteLine("\nNewtonsoft.Json deserialized value:");
         testOutputHelper.WriteLine(njsDeserialized?.ToString() ?? "null");
         Assert.Equal(expectedValue, njsDeserialized?.Value);
@@ -122,27 +154,28 @@ public class Class1Tests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(expectedValue, result.Value);
 
-         // BSON serialization
-         using var ms = new MemoryStream();
-         using (var writer = new Newtonsoft.Json.Bson.BsonDataWriter(ms))
-         {
-             var serializer = new Newtonsoft.Json.JsonSerializer();
-             serializer.Serialize(writer, result);
-         }
-         var bsonBytes = ms.ToArray();
-         var bsonBase64 = Convert.ToBase64String(bsonBytes);
-         testOutputHelper.WriteLine("\nBSON serialization (Base64):");
-         testOutputHelper.WriteLine(bsonBase64);
+        // BSON serialization
+        using var ms = new MemoryStream();
+        using (var writer = new Newtonsoft.Json.Bson.BsonDataWriter(ms))
+        {
+            var serializer = new Newtonsoft.Json.JsonSerializer();
+            serializer.Serialize(writer, result);
+        }
 
-         // BSON deserialization
-         using var ms2 = new MemoryStream(bsonBytes);
-         using (var reader = new Newtonsoft.Json.Bson.BsonDataReader(ms2))
-         {
-             var serializer = new Newtonsoft.Json.JsonSerializer();
-             var bsonDeserialized = serializer.Deserialize<Class1WithPredefinedProperty>(reader);
-             testOutputHelper.WriteLine("\nBSON deserialized value:");
-             testOutputHelper.WriteLine(bsonDeserialized?.ToString() ?? "null");
-             Assert.Equal(expectedValue, bsonDeserialized?.Value);
-         }
+        var bsonBytes = ms.ToArray();
+        var bsonBase64 = Convert.ToBase64String(bsonBytes);
+        testOutputHelper.WriteLine("\nBSON serialization (Base64):");
+        testOutputHelper.WriteLine(bsonBase64);
+
+        // BSON deserialization
+        using var ms2 = new MemoryStream(bsonBytes);
+        using (var reader = new Newtonsoft.Json.Bson.BsonDataReader(ms2))
+        {
+            var serializer = new Newtonsoft.Json.JsonSerializer();
+            var bsonDeserialized = serializer.Deserialize<Class1WithPredefinedProperty>(reader);
+            testOutputHelper.WriteLine("\nBSON deserialized value:");
+            testOutputHelper.WriteLine(bsonDeserialized?.ToString() ?? "null");
+            Assert.Equal(expectedValue, bsonDeserialized?.Value);
+        }
     }
 }
