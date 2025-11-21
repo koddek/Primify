@@ -20,8 +20,7 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Decode Signing Key
-        run: echo "${{ secrets.SNK_FILE_BASE64 }}" | base64 --decode > Primify.snk
+      # Step "Decode Signing Key" REMOVED because we disabled signing.
 
       - name: Authenticate with GitHub Packages
         run: |
