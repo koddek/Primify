@@ -2,44 +2,62 @@ name: Publish NuGet
 
 on:
   push:
-    branches: [ main ]
-    paths:
-      - 'src/**'
-      - '.github/workflows/**'
-  workflow_dispatch: # Allows manual triggering if needed
-
-env:
-  PROJECT_PATH: 'src/Primify/Primify.csproj'
-  NUGET_OUT: './packages'
-
-permissions:
-  contents: read          # Read code
-  packages: write         # Publish to GitHub Packages
+    branches:
+      - main
+    tags:
+      - 'v*'
 
 jobs:
-  publish:
+  build-and-publish:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+    permissions:
+      packages: write
+      contents: read
 
-      - name: Setup .NET 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
 
-      # 1. Restore Signing Key
-      - name: Decode Signing Key
-        run: echo "${{ secrets.SNK_FILE_BASE64 }}" | base64 --decode > ${{ github.workspace }}/Primify.snk
-
-      # 2. Pack (Automatically restores and builds)
-      - name: Build & Pack
-        run: dotnet pack ${{ env.PROJECT_PATH }} -c Release -o ${{ env.NUGET_OUT }}
-
-      # 3. Push to GitHub Packages
-      - name: Push to GitHub Registry
+      # Add GitHub Packages as an extra source (auth via GITHUB_TOKEN)
+      - name: Add GitHub Packages source
         run: |
-          dotnet nuget push "${{ env.NUGET_OUT }}/*.nupkg" \
-            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
-            --api-key "${{ secrets.GITHUB_TOKEN }}" \
+          dotnet nuget add source --username ${{ github.repository_owner }} \
+            --password ${{ secrets.GITHUB_TOKEN }} \
+            --store-password-in-clear-text \
+            --name github "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+
+      - name: Restore dependencies (with GitHub Packages)
+        run: dotnet restore
+
+      - name: Build project
+        run: dotnet build src/Primify/Primify.csproj -c Release --no-restore
+
+      - name: Determine package version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            TAG="${{ github.ref_name }}"
+            VERSION="${TAG#v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "version=1.0.0-pre${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pack NuGet package
+        run: |
+          dotnet pack src/Primify/Primify.csproj \
+            -c Release \
+            --no-restore \
+            -p:PackageVersion=${{ steps.version.outputs.version }} \
+            --output ./packages
+
+      - name: Publish to GitHub Packages
+        run: |
+          dotnet nuget push "./packages/*.nupkg" \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --source "github" \
             --skip-duplicate
