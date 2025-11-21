@@ -74,7 +74,7 @@ public static class PrimifyRenderer
 
                          {{equatableEquals}}
                          {
-                             {{(model.IsValueType ? "" : "if (other is null) return false;\n")}} return EqualityComparer<{{argument}}>.Default.Equals(Value, other.Value);
+                             {{(model.IsValueType ? "" : "if (other is null) return false;\n")}} return System.Collections.Generic.EqualityComparer<{{argument}}>.Default.Equals(Value, other.Value);
                          }
                      """;
         }
