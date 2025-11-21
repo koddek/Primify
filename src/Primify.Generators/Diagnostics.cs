@@ -2,9 +2,6 @@ namespace Primify.Generators;
 
 public static class Diagnostics
 {
-    // ---------------------------------------------------------
-    // ERRORS
-    // ---------------------------------------------------------
     public static readonly DiagnosticDescriptor TypeMustBePartial = new(
         id: "PRIT002",
         title: "Type Must Be Partial",
@@ -21,13 +18,12 @@ public static class Diagnostics
         defaultSeverity: DiagnosticSeverity.Warning,
         isEnabledByDefault: true);
 
-    // ---------------------------------------------------------
-    // INFO / DISCOVERY
-    // ---------------------------------------------------------
+    // Usage Hints
     public static readonly DiagnosticDescriptor ImplementValidate = new(
         id: "PRIU002",
         title: "Validation Available",
-        messageFormat: "Custom validation can be added by implementing 'private static partial bool Validate({0} value)'.",
+        messageFormat:
+        "Custom validation can be added by implementing 'private static partial void Validate({0} value)'.",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
@@ -35,7 +31,8 @@ public static class Diagnostics
     public static readonly DiagnosticDescriptor ImplementNormalize = new(
         id: "PRIU003",
         title: "Normalization Available",
-        messageFormat: "Value sanitization can be added by implementing 'private static partial {0} Normalize({0} value)'.",
+        messageFormat:
+        "Value sanitization can be added by implementing 'private static partial {0} Normalize({0} value)'.",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
@@ -43,14 +40,13 @@ public static class Diagnostics
     public static readonly DiagnosticDescriptor AddFactory = new(
         id: "PRIU004",
         title: "Factory Properties Available",
-        messageFormat: "Predefined instances can be added via the private constructor: 'public static {0} Default {{ get; }} = new {0}(...);'",
+        messageFormat:
+        "Predefined instances can be added via the private constructor: 'public static {0} Default {{ get; }} = new {0}(...);'",
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
 
-    // ---------------------------------------------------------
-    // INTERNAL / HIDDEN
-    // ---------------------------------------------------------
+    // Hidden diagnostic to silently ignore false positives
     public static readonly DiagnosticDescriptor Ignore = new(
         id: "PRIT000",
         title: "Ignored",
