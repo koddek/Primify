@@ -5,48 +5,41 @@ public class PrimifyGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        IncrementalGeneratorBuilder.Create()
-            .StartSyntaxPipeline<PrimifyModel>()
-            .WithPredicate((node, _) =>
-            {
-                if (node is not TypeDeclarationSyntax t) return false;
-                if (t.AttributeLists.Count == 0) return false;
+        // 1. Post-Init: Inject the attribute definition
 
-                // Basic string check to filter early
-                return t.AttributeLists.Any(list =>
-                    list.Attributes.Any(attr =>
-                        attr.Name.ToString().IndexOf("Primify", StringComparison.OrdinalIgnoreCase) >= 0));
+        // 2. Start Pipeline
+        Source.FromSyntax(context, (node, _) =>
+            {
+                // Fast syntactic check
+                return node is TypeDeclarationSyntax { AttributeLists.Count: > 0 } t
+                       && t.AttributeLists.Any(l => l.Attributes.Any(a => a.Name.ToString().Contains("Primify")));
             })
-            .WithTransform((ctx, _) =>
+
+            // 3. Transform & Validate
+            // Returns GenResult<PrimifyModel> which handles success/failure flow
+            .SelectResult((ctx, ct) =>
             {
                 var node = (TypeDeclarationSyntax)ctx.Node;
-                var symbol = ctx.SemanticModel.GetDeclaredSymbol(node);
 
-                // If resolving failed, return error
-                if (symbol is null)
+                if (ctx.SemanticModel.GetDeclaredSymbol(node) is not { } symbol)
                     return GenResult<PrimifyModel>.Fail(Diagnostic.Create(Diagnostics.TypeMustHaveAttributes,
                         node.GetLocation(), node.Identifier.Text));
 
-                // Find attribute
-                var primifyAttr = symbol.GetAttributes()
+                // Resolve Attribute
+                var attr = symbol.GetAttributes()
                     .FirstOrDefault(a => a.AttributeClass?.Name.Contains("Primify") == true);
-
-                // If attribute is missing (false positive predicate), silently ignore.
-                // Do not error out. Just skip.
-                if (primifyAttr is null)
-                {
+                if (attr is null)
                     return GenResult<PrimifyModel>.Fail(Diagnostic.Create(Diagnostics.Ignore, Location.None));
-                }
 
+                // Validation: Must be partial
                 if (!node.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
                 {
-                    return GenResult<PrimifyModel>.Fail(
-                        Diagnostic.Create(Diagnostics.TypeMustBePartial, node.Identifier.GetLocation(),
-                            node.Identifier.Text));
+                    return GenResult<PrimifyModel>.Fail(Diagnostic.Create(Diagnostics.TypeMustBePartial,
+                        node.Identifier.GetLocation(), node.Identifier.Text));
                 }
 
-                var wrapperArgument = primifyAttr.AttributeClass?.TypeArguments.FirstOrDefault()?.ToDisplayString() ??
-                                      "object";
+                // Extract Data
+                var wrappedType = attr.AttributeClass?.TypeArguments.FirstOrDefault()?.ToDisplayString() ?? "object";
 
                 var keyword = node switch
                 {
@@ -61,49 +54,37 @@ public class PrimifyGenerator : IIncrementalGenerator
                 var hasNormalize = symbol.GetMembers("Normalize").OfType<IMethodSymbol>().Any();
                 var hasValidate = symbol.GetMembers("Validate").OfType<IMethodSymbol>().Any();
 
-                return new PrimifyModel(
-                    ns: symbol.ContainingNamespace.ToDisplayString(),
-                    className: symbol.Name,
-                    keyword: keyword,
-                    wrapperArgument: wrapperArgument,
-                    isValueType: symbol.IsValueType,
-                    isRecord: node is RecordDeclarationSyntax,
-                    hasNormalize: hasNormalize,
-                    hasValidate: hasValidate,
-                    location: node.Identifier.GetLocation()
-                );
+                return GenResult<PrimifyModel>.Success(new PrimifyModel(
+                    Namespace: symbol.ContainingNamespace.ToDisplayString(),
+                    ClassName: symbol.Name,
+                    Keyword: keyword,
+                    WrappedType: wrappedType,
+                    IsValueType: symbol.IsValueType,
+                    IsRecord: node is RecordDeclarationSyntax,
+                    HasNormalize: hasNormalize,
+                    HasValidate: hasValidate,
+                    Location: node.Identifier.GetLocation()
+                ));
             })
-            .WithOutput((spc, model, _) =>
+
+            // 4. Render Output
+            // Automatically handles errors returned from SelectResult
+            .Render((spc, model) =>
             {
-                // 1. Validate Hint
+                // Report Usage Hints (Info Diagnostics)
                 if (!model.HasValidate)
-                {
-                    spc.ReportDiagnostic(Diagnostic.Create(
-                        Diagnostics.ImplementValidate,
-                        model.Location,
-                        model.WrapperArgument)); // {0}
-                }
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ImplementValidate, model.Location,
+                        model.WrappedType));
 
-                // 2. Normalize Hint
                 if (!model.HasNormalize)
-                {
-                    spc.ReportDiagnostic(Diagnostic.Create(
-                        Diagnostics.ImplementNormalize,
-                        model.Location,
-                        model.WrapperArgument)); // {0}
-                }
+                    spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ImplementNormalize, model.Location,
+                        model.WrappedType));
 
-                // 3. Factory Hint
-                spc.ReportDiagnostic(Diagnostic.Create(
-                    Diagnostics.AddFactory,
-                    model.Location,
-                    model.ClassName)); // {0}
+                spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.AddFactory, model.Location, model.ClassName));
 
-                var sourceCode = PrimifyRenderer.Render(model);
-                spc.AddSource($"{model.Namespace}.{model.ClassName}.g.cs", sourceCode);
-            })
-            .And()
-            .Build()
-            .Initialize(context);
+                // Generate Code
+                var source = PrimifyRenderer.Render(model);
+                spc.AddSource($"{model.Namespace}.{model.ClassName}.g.cs", source);
+            });
     }
 }

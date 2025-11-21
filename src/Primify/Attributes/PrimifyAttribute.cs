@@ -1,4 +1,4 @@
-﻿namespace Primify.Attributes
+namespace Primify.Attributes
 {
     /// <summary>
     /// Marks a type to be generated as a value wrapper type for the specified primitive type.
