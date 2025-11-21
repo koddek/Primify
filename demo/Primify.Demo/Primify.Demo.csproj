@@ -9,7 +9,7 @@
 
     <ItemGroup>
       <PackageReference Include="LiteDB" Version="5.0.21" />
-      <PackageReference Include="primify" Version="1.6.0" />
+      <PackageReference Include="primify" Version="1.6.9" />
     </ItemGroup>
 
 </Project>
