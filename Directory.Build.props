@@ -29,12 +29,6 @@
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
     </PropertyGroup>
 
-    <!-- Sign all non‑test assemblies -->
-    <PropertyGroup Condition="'$(IsTestProject)' != 'true'">
-        <SignAssembly>true</SignAssembly>
-        <AssemblyOriginatorKeyFile>$(MSBuildThisFileDirectory)Primify.snk</AssemblyOriginatorKeyFile>
-    </PropertyGroup>
-
     <ItemGroup>
         <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/"/>
         <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="/"/>
