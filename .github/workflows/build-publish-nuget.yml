@@ -25,12 +25,18 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Add GitHub Packages NuGet source
+      - name: Add NuGet sources
         run: |
-          dotnet nuget add source --username ${{ github.repository_owner }} \
+          # Add nuget.org as a source
+          dotnet nuget add source https://api.nuget.org/v3/index.json --name nuget.org
+          
+          # Add GitHub Packages as a source
+          dotnet nuget add source \
+            --username ${{ github.repository_owner }} \
             --password ${{ secrets.GITHUB_TOKEN }} \
             --store-password-in-clear-text \
-            --name github "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+            --name github \
+            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
 
       - name: Restore with local fallback (allows project references to win over packages)
         run: dotnet restore --ignore-failed-sources
