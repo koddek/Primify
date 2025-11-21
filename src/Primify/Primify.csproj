@@ -28,11 +28,4 @@
               Visible="false"/>
     </ItemGroup>
 
-    <!-- SAFETY: Ensure the generator is actually built before we try to pack its files -->
-    <Target Name="BuildGenerator" BeforeTargets="GenerateNuspec">
-        <MSBuild Projects="..\Primify.Generators\Primify.Generators.csproj"
-                 Targets="Build"
-                 Properties="Configuration=$(Configuration)"/>
-    </Target>
-
 </Project>
