@@ -1,8 +1,8 @@
 # Primify
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/koddek/Primify/build-publish-nuget.yml?branch=main&style=for-the-badge)](https://github.com/koddek/Primify/actions/workflows/build-publish-nuget.yml)
-[![NuGet Version](https://img.shields.io/github/package-json/v/koddek/Primify/Primify?label=NuGet&style=for-the-badge)](https://github.com/koddek/Primify/pkgs/nuget/Primify)
-[![License](https://img.shields.io/github/license/koddek/Primify?style=flat-square)](LICENSE)
+[![NuGet Version](https://img.shields.io/badge/NuGet-1.6.0-blue?style=for-the-badge&logo=nuget)](https://github.com/koddek/Primify/pkgs/nuget/Primify)
+[![License](https://img.shields.io/github/license/koddek/Primify?style=for-the-badge)](LICENSE)
 
 **Primify** is a high-performance C# source generator that creates strongly-typed, boilerplate-free wrappers for
 primitive values. It helps you eliminate "Primitive Obsession" and build more robust, expressive, and secure domain
@@ -299,23 +299,48 @@ BsonMapper.Global.RegisterType<UserId>(
 ## Benchmarks
 ```csharp
 // * Summary *
-
-BenchmarkDotNet v0.15.1, macOS Sequoia 15.5 (24F74) [Darwin 24.5.0]
+BenchmarkDotNet v0.15.6, macOS 26.1 (25B78) [Darwin 25.1.0]
 Apple M1, 1 CPU, 8 logical and 8 physical cores
-.NET SDK 9.0.300
-  [Host]     : .NET 9.0.5 (9.0.525.21509), Arm64 RyuJIT AdvSIMD
-  DefaultJob : .NET 9.0.5 (9.0.525.21509), Arm64 RyuJIT AdvSIMD
+.NET SDK 10.0.100
+[Host]    : .NET 10.0.0 (10.0.0, 10.0.25.52411), Arm64 RyuJIT armv8.0-a
+.NET 10.0 : .NET 10.0.0 (10.0.0, 10.0.25.52411), Arm64 RyuJIT armv8.0-a
+Job=.NET 10.0  Runtime=.NET 10.0
 
-// This wrapper was used
+// 1. Simple Wrapper (Zero logic)
 [Primify<string>]
-public readonly partial record struct Username;
+public readonly partial record struct SimpleUser;
+
+// 2. Smart Wrapper (Normalization + Validation)
+[Primify<string>]
+public readonly partial record struct SmartUser
+{
+    // Normalize: Trim and Lowercase
+    private static string Normalize(string value)
+    {
+        return value.Trim().ToLowerInvariant();
+    }
+
+    // Validate: Void method that throws if invalid
+    static void Validate(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new ArgumentException("Value cannot be empty");
+
+        if (value.Length < 3)
+            throw new ArgumentException("Value must be at least 3 characters");
+    }
+}
 ```
-| Method              | Mean      | Error    | StdDev    | Median    | Ratio | RatioSD | Gen0   | Allocated | Alloc Ratio |
-|-------------------- |----------:|---------:|----------:|----------:|------:|--------:|-------:|----------:|------------:|
-| Serialize_Raw       | 117.55 ns | 5.104 ns | 14.561 ns | 110.75 ns |  1.01 |    0.17 | 0.0076 |      48 B |        1.00 |
-| Serialize_Wrapper   | 151.54 ns | 3.096 ns |  6.393 ns | 150.04 ns |  1.31 |    0.15 | 0.0076 |      48 B |        1.00 |
-| Deserialize_Raw     |  91.54 ns | 1.644 ns |  2.304 ns |  91.33 ns |  0.79 |    0.09 | 0.0063 |      40 B |        0.83 |
-| Deserialize_Wrapper | 256.73 ns | 4.824 ns |  4.512 ns | 257.59 ns |  2.21 |    0.24 | 0.0062 |      40 B |        0.83 |
+
+| Method                | Mean       | Ratio | Gen0   | Allocated | Alloc Ratio |
+|---------------------- |-----------:|------:|-------:|----------:|------------:|
+| 'Manual String Logic' | 24.5890 ns | 1.000 | 0.0127 |      80 B |        1.00 |
+| SmartUser.From()      | 21.5932 ns | 0.878 | 0.0127 |      80 B |        1.00 |
+| SimpleUser.From()     |  0.0000 ns | 0.000 |      - |         - |        0.00 |
+| 'String == String'    |  0.0000 ns | 0.000 |      - |         - |        0.00 |
+| 'Simple == Simple'    |  0.1039 ns | 0.004 |      - |         - |        0.00 |
+| 'Smart == Smart'      |  1.7500 ns | 0.071 |      - |         - |        0.00 |
+
 
 ## Contributing
 

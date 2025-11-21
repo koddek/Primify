@@ -1,22 +1,38 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
+        <TargetFramework>net10.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.5.0</Version>
+        <Version>1.6.1</Version>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="LiteDB" Version="5.0.21"/>
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+        <PackageReference Include="Newtonsoft.Json" Version="13.0.4"/>
         <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3"/>
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Primify.Generators\Primify.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false"/>
-        <None Include="$(MSBuildProjectDirectory)\..\Primify.Generators\bin\$(Configuration)\netstandard2.0\Primify.Generators.dll" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false"/>
+        <!-- Keep the reference for development support -->
+        <ProjectReference Include="..\Primify.Generators\Primify.Generators.csproj"
+                          OutputItemType="Analyzer"
+                          ReferenceOutputAssembly="false"/>
+
+        <!-- Pack ALL DLLs from the generator output (Generator + FluentLib) -->
+        <!-- Use a wildcard *.dll to catch the generator AND its dependency -->
+        <None Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\*.dll"
+              Pack="true"
+              PackagePath="analyzers/dotnet/cs"
+              Visible="false"/>
     </ItemGroup>
+
+    <!-- SAFETY: Ensure the generator is actually built before we try to pack its files -->
+    <Target Name="BuildGenerator" BeforeTargets="GenerateNuspec">
+        <MSBuild Projects="..\Primify.Generators\Primify.Generators.csproj"
+                 Targets="Build"
+                 Properties="Configuration=$(Configuration)"/>
+    </Target>
 
 </Project>

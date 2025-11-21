@@ -1,7 +1,3 @@
-﻿namespace Primify.Benchmarks;
+﻿using Primify.Benchmarks;
 
-public class Program
-{
-    public static void Main(string[] args)
-        => BenchmarkRunner.Run<PrimifyBenchmarks>();
-}
+var summary = BenchmarkRunner.Run<UsernameBenchmarks>();
