@@ -59,4 +59,27 @@ public class LiteDbTests
         Assert.Equal(username, deserializedUsername);
         Assert.Equal(age, deserializedAge);
     }
+
+    [Fact]
+    public void Query_Passes_WhenQuery()
+    {
+        using var db = new LiteDatabase(":memory:");
+        db.GetCollection<User>("users")
+            .Insert(new User(UserId.From(Guid.CreateVersion7()), Username.From("Sue"), Age.From(8)));
+        db.GetCollection<User>("users")
+            .Insert(new User(UserId.From(Guid.CreateVersion7()), Username.From("Storm"), Age.From(14)));
+        db.GetCollection<User>("users")
+            .Insert(new User(UserId.From(Guid.CreateVersion7()), Username.From("Mark"), Age.From(25)));
+        db.GetCollection<User>("users")
+            .Insert(new User(UserId.From(Guid.CreateVersion7()), Username.From("Kelly"), Age.From(18)));
+        db.GetCollection<User>("users")
+            .Insert(new User(UserId.From(Guid.CreateVersion7()), Username.From("Jon"), Age.From(34)));
+
+        var result = db.GetCollection<User>("users")
+            .Query().Where(o => ((string)o.Username).StartsWith("S"));
+
+        Assert.Equal(2, result.Count());
+    }
+
+    record User(UserId Id, Username Username, Age Age);
 }
