@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -27,11 +27,22 @@
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
             <PrivateAssets>all</PrivateAssets>
         </PackageReference>
+        <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.102" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Primify.Generators\Primify.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\..\src\Primify\Primify.csproj"/>
+    </ItemGroup>
+
+    <!-- Include Flowgen.dll as an analyzer dependency -->
+    <ItemGroup>
+        <None Include="..\..\src\Primify.Generators\bin\$(Configuration)\netstandard2.0\Flowgen.dll">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <Visible>false</Visible>
+        </None>
+        <!-- Reference Flowgen.dll as an analyzer so it's loaded in the compiler context -->
+        <Analyzer Include="..\..\src\Primify.Generators\bin\$(Configuration)\netstandard2.0\Flowgen.dll" />
     </ItemGroup>
 
 </Project>
