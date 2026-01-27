@@ -3,7 +3,7 @@
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.7.2</Version>
+        <Version>1.8.0</Version>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
@@ -20,7 +20,7 @@
         <ProjectReference Include="..\Primify.Generators\Primify.Generators.csproj"
                           OutputItemType="Analyzer"
                           ReferenceOutputAssembly="false"/>
-        
+
         <!-- Pack ALL DLLs from the generator output (Generator + Flowgen) -->
         <!-- Use a wildcard *.dll to catch the generator AND its dependency -->
         <None Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\*.dll"
