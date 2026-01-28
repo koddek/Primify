@@ -1,3 +1,8 @@
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using System.Linq;
+
 namespace Primify.Generators;
 
 [Generator]
@@ -5,33 +10,42 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        Flow.Create(context)
-            .ForAttributeWithMetadataName<PrimifyModel>("Primify.Attributes.PrimifyAttribute`1")
-            .Select((ctx, _) => ExtractModel(ctx))
-            .Emit((spc, model) => GenerateCode(spc, model))
-            .Build()
-            .Initialize(context);
+        // Filter to only attribute declarations
+        var provider = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                predicate: static (s, _) => IsSyntaxTargetForGeneration(s),
+                transform: static (ctx, _) => GetSemanticTargetForGeneration(ctx))
+            .Where(static m => m is not null);
+
+        context.RegisterSourceOutput(provider, static (spc, model) => GenerateCode(spc, model!));
     }
 
-    private static PrimifyModel ExtractModel(GeneratorAttributeSyntaxContext ctx)
+    private static bool IsSyntaxTargetForGeneration(SyntaxNode node)
     {
-        var node = (TypeDeclarationSyntax)ctx.TargetNode;
-        var symbol = ctx.TargetSymbol;
+        return node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax;
+    }
 
-        if (symbol is not INamedTypeSymbol typeSymbol)
-            throw new InvalidOperationException("Could not get symbol for type");
+    private static PrimifyModel? GetSemanticTargetForGeneration(GeneratorSyntaxContext context)
+    {
+        var node = (TypeDeclarationSyntax)context.Node;
+        
+        // Check if the type has the PrimifyAttribute
+        var typeSymbol = context.SemanticModel.GetDeclaredSymbol(node);
+        if (typeSymbol is null) return null;
 
+        var hasPrimifyAttribute = typeSymbol.GetAttributes()
+            .Any(a => a.AttributeClass?.Name == "PrimifyAttribute`1" || 
+                      a.AttributeClass?.Name == "PrimifyAttribute");
+
+        if (!hasPrimifyAttribute) return null;
+
+        // Get the wrapped type from the attribute
         var attr = typeSymbol.GetAttributes()
             .FirstOrDefault(a => a.AttributeClass?.Name.Contains("Primify") == true);
 
-        if (attr is null)
-            throw new InvalidOperationException("No Primify attribute found");
+        var wrappedType = attr?.AttributeClass?.TypeArguments.FirstOrDefault()?.ToDisplayString() ?? "object";
 
-        if (!node.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)))
-            throw new InvalidOperationException($"Type '{typeSymbol.Name}' must be partial");
-
-        var wrappedType = attr.AttributeClass?.TypeArguments.FirstOrDefault()?.ToDisplayString() ?? "object";
-
+        // Determine the keyword (class, struct, record class, record struct)
         var keyword = node switch
         {
             ClassDeclarationSyntax => "class",
@@ -41,6 +55,10 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             _ => "class"
         };
 
+        // Check for Normalize and Validate methods
+        var hasNormalize = typeSymbol.GetMembers("Normalize").OfType<IMethodSymbol>().Any();
+        var hasValidate = typeSymbol.GetMembers("Validate").OfType<IMethodSymbol>().Any();
+
         return new PrimifyModel(
             Namespace: typeSymbol.ContainingNamespace.ToDisplayString(),
             ClassName: typeSymbol.Name,
@@ -48,31 +66,41 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             WrappedType: wrappedType,
             IsValueType: typeSymbol.IsValueType,
             IsRecord: node is RecordDeclarationSyntax,
-            HasNormalize: typeSymbol.GetMembers("Normalize").OfType<IMethodSymbol>().Any(),
-            HasValidate: typeSymbol.GetMembers("Validate").OfType<IMethodSymbol>().Any(),
+            HasNormalize: hasNormalize,
+            HasValidate: hasValidate,
             Location: node.Identifier.GetLocation()
         );
     }
 
-    private static void GenerateCode(SourceProductionContext spc, PrimifyModel model)
+    private static void GenerateCode(SourceProductionContext context, PrimifyModel model)
     {
+        // Report diagnostics
         if (model.WrappedType == "object")
         {
-            spc.ReportDiagnostic(Diagnostic.Create(
+            context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.InvalidType,
                 model.Location,
                 model.ClassName));
         }
 
         if (!model.HasValidate)
-            spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ImplementValidate, model.Location, model.WrappedType));
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.ImplementValidate, 
+                model.Location, 
+                model.WrappedType));
 
         if (!model.HasNormalize)
-            spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.ImplementNormalize, model.Location, model.WrappedType));
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.ImplementNormalize, 
+                model.Location, 
+                model.WrappedType));
 
-        spc.ReportDiagnostic(Diagnostic.Create(Diagnostics.AddFactory, model.Location, model.ClassName));
+        context.ReportDiagnostic(Diagnostic.Create(
+            Diagnostics.AddFactory, 
+            model.Location, 
+            model.ClassName));
 
         var source = PrimifyRenderer.Render(model);
-        spc.AddSource($"{model.Namespace}.{model.ClassName}.g.cs", source);
+        context.AddSource($"{model.Namespace}.{model.ClassName}.g.cs", source);
     }
 }
