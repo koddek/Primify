@@ -1,13 +1,15 @@
 <Solution>
-  <Folder Name="/demo/">
-    <Project Path="demo/Primify.Demo/Primify.Demo.csproj" />
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Primify.Benchmarks/Primify.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/Primify.Demo/Primify.Demo.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/Primify.Generators/Primify.Generators.csproj" />
     <Project Path="src/Primify/Primify.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Primify.Benchmarks/Primify.Benchmarks.csproj" />
     <Project Path="tests/Primify.Tests/Primify.Tests.csproj" />
   </Folder>
 </Solution>
