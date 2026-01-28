@@ -1,10 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <OutputType>exe</OutputType>
         <TargetFramework>net10.0</TargetFramework>
         <Nullable>enable</Nullable>
         <IsPackable>false</IsPackable>
         <RootNamespace>Primify.Generator.Tests</RootNamespace>
+        <ImplicitUsings>enable</ImplicitUsings>
     </PropertyGroup>
 
     <PropertyGroup>
@@ -18,31 +20,12 @@
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.SourceGenerators.Testing.XUnit" Version="1.1.2"/>
-        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
-        <PackageReference Include="NETStandard.Library" Version="2.0.3" />
-        <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3"/>
-        <PackageReference Include="xunit" Version="2.9.3"/>
-        <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
-            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-            <PrivateAssets>all</PrivateAssets>
-        </PackageReference>
-        <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.102" />
+        <PackageReference Include="TUnit" Version="1.12.65" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\..\src\Primify.Generators\Primify.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\..\src\Primify\Primify.csproj"/>
-    </ItemGroup>
-
-    <!-- Include Flowgen.dll as an analyzer dependency -->
-    <ItemGroup>
-        <None Include="..\..\src\Primify.Generators\bin\$(Configuration)\netstandard2.0\Flowgen.dll">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-            <Visible>false</Visible>
-        </None>
-        <!-- Reference Flowgen.dll as an analyzer so it's loaded in the compiler context -->
-        <Analyzer Include="..\..\src\Primify.Generators\bin\$(Configuration)\netstandard2.0\Flowgen.dll" />
     </ItemGroup>
 
 </Project>

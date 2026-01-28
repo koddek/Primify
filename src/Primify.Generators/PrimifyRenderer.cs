@@ -33,13 +33,13 @@ public static class PrimifyRenderer
                      
                      private {{model.ClassName}}({{model.WrappedType}} value) => Value = value;
 
-                     public static {{model.ClassName}} From({{model.WrappedType}} value)
-                     {
-                         var processedValue = value;
-                         {{(model.HasNormalize ? "" : "// ")}}processedValue = Normalize(processedValue);
-                         {{(model.HasValidate ? "" : "// ")}}Validate(processedValue);
-                         return new {{model.ClassName}}(processedValue);
-                     }
+                      public static {{model.ClassName}} From({{model.WrappedType}} value)
+                      {
+                          var processedValue = value;
+                          {{(model.HasValidate ? "if (!Validate(processedValue)) throw new ArgumentOutOfRangeException(nameof(value));" : "// Validate not implemented")}}
+                          {{(model.HasNormalize ? "processedValue = Normalize(processedValue);" : "// Normalize not implemented")}}
+                          return new {{model.ClassName}}(processedValue);
+                      }
                      
                      {{implicitCasting}}
 
@@ -89,20 +89,20 @@ public static class PrimifyRenderer
         }
 
         return $$"""
-                 public override bool Equals(object? obj) => obj is {{name}} other && Equals(other);
+                  public override bool Equals(object? obj) => obj is {{name}} other && Equals(other);
 
-                 public bool Equals({{name}}? other)
-                 {
-                     if (ReferenceEquals(null, other)) return false;
-                     if (ReferenceEquals(this, other)) return true;
-                     return {{equalsExpr("Value", "other.Value")}};
-                 }
+                  public bool Equals({{name}}? other)
+                  {
+                      if (ReferenceEquals(null, other)) return false;
+                      if (ReferenceEquals(this, other)) return true;
+                      return {{equalsExpr("Value", "other.Value")}};
+                  }
 
-                 public override int GetHashCode() => {{hashCodeExpr("Value")}};
+                  public override int GetHashCode() => {{hashCodeExpr("Value")}};
 
-                 public static bool operator ==({{name}}? left, {{name}}? right) => ReferenceEquals(left, right) || (left is not null && left.Equals(right));
-                 public static bool operator !=({{name}}? left, {{name}}? right) => !(left == right);
-                 """;
+                  public static bool operator ==({{name}}? left, {{name}}? right) => ReferenceEquals(left, right) || (left is not null && left.Equals(right));
+                  public static bool operator !=({{name}}? left, {{name}}? right) => !(left == right);
+                  """;
     }
 
     private static (Func<string, string, string> equalsExpr, Func<string, string> hashCodeExpr) GetEqualityExpressions(string wrappedType)
@@ -192,16 +192,16 @@ public static class PrimifyRenderer
                 // We must indent the multi-line body correctly
                 fromBsonImplementation = $$"""
                                            {
-                                                   var doc = value.AsDocument;
-                                                   var utcDateTime = doc["DateTime"].AsDateTime;
-                                                   var offset = new System.TimeSpan(doc["Offset"].AsInt64);
+                                               var doc = value.AsDocument;
+                                               var utcDateTime = doc["DateTime"].AsDateTime;
+                                               var offset = new System.TimeSpan(doc["Offset"].AsInt64);
 
-                                                   // Create a UTC DateTimeOffset first, then convert to the original offset
-                                                   var utcTime = new System.DateTimeOffset(utcDateTime);
-                                                   var originalTime = utcTime.ToOffset(offset);
+                                               // Create a UTC DateTimeOffset first, then convert to the original offset
+                                               var utcTime = new System.DateTimeOffset(utcDateTime);
+                                               var originalTime = utcTime.ToOffset(offset);
 
-                                                   return {{name}}.From(originalTime);
-                                               }
+                                               return {{name}}.From(originalTime);
+                                           }
                                            """;
                 break;
 
@@ -241,24 +241,24 @@ public static class PrimifyRenderer
             case "System.DateTimeOffset":
                 // We format this manually to look decent in the generated file
                 serializeCode = """
-                                wrapper => new LiteDB.BsonDocument
-                                    {
-                                        ["DateTime"] = wrapper.Value.UtcDateTime,
-                                        ["Offset"] = wrapper.Value.Offset.Ticks
-                                    }
-                                """;
+                                 wrapper => new LiteDB.BsonDocument
+                                     {
+                                         ["DateTime"] = wrapper.Value.UtcDateTime,
+                                         ["Offset"] = wrapper.Value.Offset.Ticks
+                                     }
+                                 """;
 
                 deserializeCode = $$"""
-                                    bson => 
-                                        {
-                                            var doc = bson.AsDocument;
-                                            var utcDateTime = doc["DateTime"].AsDateTime;
-                                            var offset = new System.TimeSpan(doc["Offset"].AsInt64);
-                                            var utcTime = new System.DateTimeOffset(utcDateTime);
-                                            var originalTime = utcTime.ToOffset(offset);
-                                            return {{name}}.From(originalTime);
-                                        }
-                                    """;
+                                     bson => 
+                                         {
+                                             var doc = bson.AsDocument;
+                                             var utcDateTime = doc["DateTime"].AsDateTime;
+                                             var offset = new System.TimeSpan(doc["Offset"].AsInt64);
+                                             var utcTime = new System.DateTimeOffset(utcDateTime);
+                                             var originalTime = utcTime.ToOffset(offset);
+                                             return {{name}}.From(originalTime);
+                                         }
+                                     """;
                 break;
 
             default:
