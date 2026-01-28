@@ -62,35 +62,13 @@ public static class PrimifyRenderer
     {
         var name = model.ClassName;
         var arg = model.WrappedType;
+        var (equalsExpr, hashCodeExpr) = GetEqualityExpressions(arg);
 
+        // For record types, let the compiler generate optimized equality
+        // Record types already have compiler-generated equality that's highly optimized
         if (model.IsRecord)
         {
-            string equalsSig = model.IsValueType
-                ? $"public bool Equals({name} other)"
-                : $"public bool Equals({name}? other)";
-
-            // Fix empty line for Value Types
-            string body;
-            if (model.IsValueType)
-            {
-                body = $"return System.Collections.Generic.EqualityComparer<{arg}>.Default.Equals(Value, other.Value);";
-            }
-            else
-            {
-                body = $"""
-                        if (other is null) return false;
-                            return System.Collections.Generic.EqualityComparer<{arg}>.Default.Equals(Value, other.Value);
-                        """;
-            }
-
-            return $$"""
-                     public override int GetHashCode() => System.Collections.Generic.EqualityComparer<{{arg}}>.Default.GetHashCode(Value);
-
-                     {{equalsSig}}
-                     {
-                         {{body}}
-                     }
-                     """;
+            return string.Empty;
         }
 
         if (model.IsValueType)
@@ -100,10 +78,10 @@ public static class PrimifyRenderer
 
                      public bool Equals({{name}} other)
                      {
-                         return System.Collections.Generic.EqualityComparer<{{arg}}>.Default.Equals(Value, other.Value);
+                         return {{equalsExpr("Value", "other.Value")}};
                      }
 
-                     public override int GetHashCode() => System.Collections.Generic.EqualityComparer<{{arg}}>.Default.GetHashCode(Value);
+                     public override int GetHashCode() => {{hashCodeExpr("Value")}};
 
                      public static bool operator ==({{name}} left, {{name}} right) => left.Equals(right);
                      public static bool operator !=({{name}} left, {{name}} right) => !(left == right);
@@ -117,14 +95,64 @@ public static class PrimifyRenderer
                  {
                      if (ReferenceEquals(null, other)) return false;
                      if (ReferenceEquals(this, other)) return true;
-                     return System.Collections.Generic.EqualityComparer<{{arg}}>.Default.Equals(Value, other.Value);
+                     return {{equalsExpr("Value", "other.Value")}};
                  }
 
-                 public override int GetHashCode() => System.Collections.Generic.EqualityComparer<{{arg}}>.Default.GetHashCode(Value);
+                 public override int GetHashCode() => {{hashCodeExpr("Value")}};
 
                  public static bool operator ==({{name}}? left, {{name}}? right) => ReferenceEquals(left, right) || (left is not null && left.Equals(right));
                  public static bool operator !=({{name}}? left, {{name}}? right) => !(left == right);
                  """;
+    }
+
+    private static (Func<string, string, string> equalsExpr, Func<string, string> hashCodeExpr) GetEqualityExpressions(string wrappedType)
+    {
+        // For strings, use direct comparison for better performance
+        if (wrappedType == "string" || wrappedType == "System.String")
+        {
+            return (
+                (left, right) => $"string.Equals({left}, {right}, System.StringComparison.Ordinal)",
+                value => $"{value}?.GetHashCode() ?? 0"
+            );
+        }
+
+        // For primitive value types, use direct == operator
+        if (IsPrimitiveValueType(wrappedType))
+        {
+            return (
+                (left, right) => $"{left} == {right}",
+                value => $"{value}.GetHashCode()"
+            );
+        }
+
+        // For other types, fall back to EqualityComparer.Default
+        return (
+            (left, right) => $"System.Collections.Generic.EqualityComparer<{wrappedType}>.Default.Equals({left}, {right})",
+            value => $"System.Collections.Generic.EqualityComparer<{wrappedType}>.Default.GetHashCode({value})"
+        );
+    }
+
+    private static bool IsPrimitiveValueType(string type)
+    {
+        return type switch
+        {
+            "int" or "System.Int32" => true,
+            "long" or "System.Int64" => true,
+            "short" or "System.Int16" => true,
+            "byte" or "System.Byte" => true,
+            "bool" or "System.Boolean" => true,
+            "char" or "System.Char" => true,
+            "double" or "System.Double" => true,
+            "float" or "System.Single" => true,
+            "decimal" or "System.Decimal" => true,
+            "Guid" or "System.Guid" => true,
+            "DateTime" or "System.DateTime" => true,
+            "DateTimeOffset" or "System.DateTimeOffset" => true,
+            "DateOnly" or "System.DateOnly" => true,
+            "TimeOnly" or "System.TimeOnly" => true,
+            "TimeSpan" or "System.TimeSpan" => true,
+            _ => false
+        };
     }
 
     private static string GenerateImplicitExplicitCasting(PrimifyModel model) =>
