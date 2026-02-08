@@ -14,19 +14,16 @@ public readonly partial record struct SmartUser
         return value.Trim().ToLowerInvariant();
     }
 
-    // Validate: return true for valid values (Primify uses a bool guard)
-    private static bool Validate(string value)
+    private static void Validate(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
-            return false;
+            throw new ArgumentOutOfRangeException(nameof(value));
         }
 
         if (value.Length < 3)
         {
-            return false;
+            throw new ArgumentOutOfRangeException(nameof(value));
         }
-
-        return true;
     }
 }
