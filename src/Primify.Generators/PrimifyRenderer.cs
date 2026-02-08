@@ -35,9 +35,9 @@ public static class PrimifyRenderer
 
                       public static {{model.ClassName}} From({{model.WrappedType}} value)
                       {
-                          var processedValue = value;
-                          {{(model.HasValidate ? "if (!Validate(processedValue)) throw new ArgumentOutOfRangeException(nameof(value));" : "// Validate not implemented")}}
-                          {{(model.HasNormalize ? "processedValue = Normalize(processedValue);" : "// Normalize not implemented")}}
+                      var processedValue = value;
+                      {{(model.HasValidate ? "Validate(processedValue);" : string.Empty)}}
+                      {{(model.HasNormalize ? "processedValue = Normalize(processedValue);" : string.Empty)}}
                           return new {{model.ClassName}}(processedValue);
                       }
                      

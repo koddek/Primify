@@ -13,7 +13,13 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" GeneratePathProperty="true" PrivateAssets="all"/>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" PrivateAssets="all" />
+        <PackageReference Include="Flowgen" Version="0.7.0" GeneratePathProperty="true" PrivateAssets="all"/>
         <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.102" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="$(PkgFlowgen)/lib/netstandard2.0/Flowgen.dll"
+              CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>

@@ -907,6 +907,7 @@ NuGet.Config
 # AI
 SCRATCH.md
 AGENTS.md
+plans/agent-plan.md
 CLAUDE.md
 GEMINI.md
 .tmp/
@@ -914,4 +915,3 @@ execution/
 .env
 credentials.json
 token.json
-.vscode/

@@ -53,13 +53,25 @@ public partial record class IntRecordClassWithNormalization
 [Primify<int>]
 public partial class IntClassWithValidation
 {
-    private static bool Validate(int value) => value >= 0;
+    private static void Validate(int value)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
 }
 
 [Primify<int>]
 public partial record class IntRecordClassWithValidation
 {
-    private static bool Validate(int value) => value >= 0;
+    private static void Validate(int value)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
 }
 
 // Classes with all features (normalization + validation + default property)
@@ -67,7 +79,13 @@ public partial record class IntRecordClassWithValidation
 public partial class IntClassWithAllFeatures
 {
     private static int Normalize(int value) => value < 1 ? -1 : value;
-    private static bool Validate(int value) => value >= 0;
+    private static void Validate(int value)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
     
     public static IntClassWithAllFeatures Empty => new(-1);
 }
@@ -76,7 +94,13 @@ public partial class IntClassWithAllFeatures
 public partial record class IntRecordClassWithAllFeatures
 {
     private static int Normalize(int value) => value < 1 ? -1 : value;
-    private static bool Validate(int value) => value >= 0;
+    private static void Validate(int value)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
     
     public static IntRecordClassWithAllFeatures Empty => new(-1);
 }

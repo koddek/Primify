@@ -14,13 +14,16 @@ public readonly partial record struct SmartUser
         return value.Trim().ToLowerInvariant();
     }
 
-    // Validate: Void method that throws if invalid
-    static void Validate(string value)
+    private static void Validate(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("Value cannot be empty");
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
 
         if (value.Length < 3)
-            throw new ArgumentException("Value must be at least 3 characters");
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
     }
 }

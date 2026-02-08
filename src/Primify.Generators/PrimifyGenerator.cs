@@ -1,3 +1,4 @@
+using Flowgen;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -10,40 +11,39 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
 {
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // Filter to only attribute declarations
-        var provider = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                predicate: static (s, _) => IsSyntaxTargetForGeneration(s),
-                transform: static (ctx, _) => GetSemanticTargetForGeneration(ctx))
-            .Where(static m => m is not null);
-
-        context.RegisterSourceOutput(provider, static (spc, model) => GenerateCode(spc, model!));
+        Flow.Create(context)
+            .ForSyntax<PrimifyModel?>(static (node, _) => node is TypeDeclarationSyntax)
+            .Select(static (ctx, _) => BuildModel(ctx))
+            .Where(static model => model is not null)
+            .Select(static model => model!)
+            .Emit(static (spc, model) => GenerateCode(spc, model))
+            .Build()
+            .Initialize(context);
     }
 
-    private static bool IsSyntaxTargetForGeneration(SyntaxNode node)
+    private static PrimifyModel? BuildModel(GeneratorSyntaxContext context)
     {
-        return node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax;
-    }
+        if (context.Node is not TypeDeclarationSyntax node)
+        {
+            return null;
+        }
 
-    private static PrimifyModel? GetSemanticTargetForGeneration(GeneratorSyntaxContext context)
-    {
-        var node = (TypeDeclarationSyntax)context.Node;
-        
-        // Check if the type has the PrimifyAttribute
-        var typeSymbol = context.SemanticModel.GetDeclaredSymbol(node);
-        if (typeSymbol is null) return null;
+        if (context.SemanticModel.GetDeclaredSymbol(node) is not INamedTypeSymbol typeSymbol)
+        {
+            return null;
+        }
 
-        var hasPrimifyAttribute = typeSymbol.GetAttributes()
-            .Any(a => a.AttributeClass?.Name == "PrimifyAttribute`1" || 
-                      a.AttributeClass?.Name == "PrimifyAttribute");
-
-        if (!hasPrimifyAttribute) return null;
-
-        // Get the wrapped type from the attribute
         var attr = typeSymbol.GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.Name.Contains("Primify") == true);
+            .FirstOrDefault(a => a.AttributeClass?.Name == "PrimifyAttribute`1" ||
+                                 a.AttributeClass?.Name == "PrimifyAttribute");
 
-        var wrappedType = attr?.AttributeClass?.TypeArguments.FirstOrDefault()?.ToDisplayString() ?? "object";
+        if (attr is null)
+        {
+            return null;
+        }
+
+        var wrappedType = attr.AttributeClass?.TypeArguments.FirstOrDefault()?.ToDisplayString()
+            ?? "object";
 
         // Determine the keyword (class, struct, record class, record struct)
         var keyword = node switch
@@ -55,10 +55,11 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             _ => "class"
         };
 
-        // Check for Normalize and Validate methods
-        var hasNormalize = typeSymbol.GetMembers("Normalize").OfType<IMethodSymbol>().Any();
-        var hasValidate = typeSymbol.GetMembers("Validate").OfType<IMethodSymbol>().Any();
+        // Check for Normalize and Validate methods (private static, to avoid public API surface)
+        var hasNormalize = typeSymbol.GetMembers("Normalize").OfType<IMethodSymbol>().Any(IsPrivateStaticNormalizer);
+        var hasValidate = typeSymbol.GetMembers("Validate").OfType<IMethodSymbol>().Any(IsPrivateStaticVoidValidator);
 
+        
         return new PrimifyModel(
             Namespace: typeSymbol.ContainingNamespace.ToDisplayString(),
             ClassName: typeSymbol.Name,
@@ -102,5 +103,20 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
 
         var source = PrimifyRenderer.Render(model);
         context.AddSource($"{model.Namespace}.{model.ClassName}.g.cs", source);
+    }
+
+    private static bool IsPrivateStaticNormalizer(IMethodSymbol method)
+    {
+        return method.DeclaredAccessibility == Accessibility.Private &&
+               method.IsStatic &&
+               method.Parameters.Length == 1;
+    }
+
+    private static bool IsPrivateStaticVoidValidator(IMethodSymbol method)
+    {
+        return method.DeclaredAccessibility == Accessibility.Private &&
+               method.IsStatic &&
+               method.ReturnType.SpecialType == SpecialType.System_Void &&
+               method.Parameters.Length == 1;
     }
 }
