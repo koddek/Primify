@@ -22,11 +22,20 @@ jobs:
 
       # Step "Decode Signing Key" REMOVED because we disabled signing.
 
+      - name: Ensure GitHub Packages token
+        env:
+          GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+        run: |
+          if [ -z "$GH_PACKAGES_TOKEN" ]; then
+            echo "Missing GH_PACKAGES_TOKEN (PAT with read:packages). Configure it in repo secrets."
+            exit 1
+          fi
+
       - name: Authenticate with GitHub Packages
         run: |
           dotnet nuget add source \
             --username ${{ github.actor }} \
-            --password ${{ secrets.GITHUB_TOKEN }} \
+            --password ${{ secrets.GH_PACKAGES_TOKEN }} \
             --store-password-in-clear-text \
             --name github \
             "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
@@ -44,5 +53,5 @@ jobs:
         run: |
           dotnet nuget push "./nupkg/*.nupkg" \
             --source github \
-            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --api-key ${{ secrets.GH_PACKAGES_TOKEN }} \
             --skip-duplicate
