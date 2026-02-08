@@ -53,13 +53,25 @@ public partial record struct IntRecordStructWithNormalization
 [Primify<int>]
 public partial struct IntStructWithValidation
 {
-    private static bool Validate(int value) => value >= 0;
+    private static void Validate(int value)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
 }
 
 [Primify<int>]
 public partial record struct IntRecordStructWithValidation
 {
-    private static bool Validate(int value) => value >= 0;
+    private static void Validate(int value)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
 }
 
 // Structs with all features (normalization + validation + default property)
@@ -67,7 +79,13 @@ public partial record struct IntRecordStructWithValidation
 public partial struct IntStructWithAllFeatures
 {
     private static int Normalize(int value) => value < 1 ? -1 : value;
-    private static bool Validate(int value) => value >= 0;
+    private static void Validate(int value)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
     
     public static IntStructWithAllFeatures Empty => new(-1);
 }
@@ -76,7 +94,13 @@ public partial struct IntStructWithAllFeatures
 public partial record struct IntRecordStructWithAllFeatures
 {
     private static int Normalize(int value) => value < 1 ? -1 : value;
-    private static bool Validate(int value) => value >= 0;
+    private static void Validate(int value)
+    {
+        if (value < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
     
     public static IntRecordStructWithAllFeatures Empty => new(-1);
 }
