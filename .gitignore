@@ -915,4 +915,3 @@ execution/
 .env
 credentials.json
 token.json
-.vscode/

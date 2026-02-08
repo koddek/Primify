@@ -1,0 +1,38 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Benchmarks (Release)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "benchmarks/Primify.Benchmarks/Primify.Benchmarks.csproj",
+        "--configuration",
+        "Release"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      }
+    },
+    {
+      "label": "Run Benchmarks (Release)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "run",
+        "--project",
+        "benchmarks/Primify.Benchmarks/Primify.Benchmarks.csproj",
+        "--configuration",
+        "Release"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "test",
+        "isDefault": false
+      }
+    }
+  ]
+}
