@@ -14,13 +14,19 @@ public readonly partial record struct SmartUser
         return value.Trim().ToLowerInvariant();
     }
 
-    // Validate: Void method that throws if invalid
-    static void Validate(string value)
+    // Validate: return true for valid values (Primify uses a bool guard)
+    private static bool Validate(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
-            throw new ArgumentException("Value cannot be empty");
+        {
+            return false;
+        }
 
         if (value.Length < 3)
-            throw new ArgumentException("Value must be at least 3 characters");
+        {
+            return false;
+        }
+
+        return true;
     }
 }

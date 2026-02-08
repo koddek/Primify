@@ -12,7 +12,8 @@
       <PackageReference Include="LiteDB" Version="5.0.21" />
       <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
-      <PackageReference Include="Primify" Version="1.8.0" />
+      <PackageReference Include="Primify" Version="1.8.2" />
+      <!-- <ProjectReference Include="../../src/Primify/Primify.csproj" /> -->
       <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.102" />
     </ItemGroup>
 
