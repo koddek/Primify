@@ -35,9 +35,9 @@ public static class PrimifyRenderer
 
                       public static {{model.ClassName}} From({{model.WrappedType}} value)
                       {
-                          var processedValue = value;
-                      {{(model.HasNormalize ? "processedValue = Normalize(processedValue);" : string.Empty)}}
+                      var processedValue = value;
                       {{(model.HasValidate ? "Validate(processedValue);" : string.Empty)}}
+                      {{(model.HasNormalize ? "processedValue = Normalize(processedValue);" : string.Empty)}}
                           return new {{model.ClassName}}(processedValue);
                       }
                      
