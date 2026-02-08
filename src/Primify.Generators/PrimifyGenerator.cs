@@ -55,9 +55,9 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             _ => "class"
         };
 
-        // Check for Normalize and Validate methods (bool Validate, like existing tests expect)
-        var hasNormalize = typeSymbol.GetMembers("Normalize").OfType<IMethodSymbol>().Any();
-        var hasValidate = typeSymbol.GetMembers("Validate").OfType<IMethodSymbol>().Any(IsBoolValidator);
+        // Check for Normalize and Validate methods (private static, to avoid public API surface)
+        var hasNormalize = typeSymbol.GetMembers("Normalize").OfType<IMethodSymbol>().Any(IsPrivateStaticNormalizer);
+        var hasValidate = typeSymbol.GetMembers("Validate").OfType<IMethodSymbol>().Any(IsPrivateStaticValidator);
 
         
         return new PrimifyModel(
@@ -105,9 +105,18 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
         context.AddSource($"{model.Namespace}.{model.ClassName}.g.cs", source);
     }
 
-    private static bool IsBoolValidator(IMethodSymbol method)
+    private static bool IsPrivateStaticNormalizer(IMethodSymbol method)
     {
-        return method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+        return method.DeclaredAccessibility == Accessibility.Private &&
+               method.IsStatic &&
+               method.Parameters.Length == 1;
+    }
+
+    private static bool IsPrivateStaticValidator(IMethodSymbol method)
+    {
+        return method.DeclaredAccessibility == Accessibility.Private &&
+               method.IsStatic &&
+               method.ReturnType.SpecialType == SpecialType.System_Boolean &&
                method.Parameters.Length == 1;
     }
 }
