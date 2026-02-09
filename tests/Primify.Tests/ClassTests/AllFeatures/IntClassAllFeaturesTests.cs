@@ -7,7 +7,7 @@ public class IntClassAllFeaturesTests
     {
         var result = IntClassWithAllFeatures.Empty;
         
-        await Assert.That(result.Value).IsEqualTo(-1);
+        await Assert.That(result.Value).IsEqualTo(0);
     }
 
     [Test]
@@ -22,7 +22,7 @@ public class IntClassAllFeaturesTests
     [Test]
     public async Task From_ThrowsException_WhenValueIsInvalid()
     {
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => { _ = IntClassWithAllFeatures.From(-1); });
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => { _ = IntClassWithAllFeatures.From(101); });
     }
 
     [Test]
@@ -40,9 +40,11 @@ public class IntClassAllFeaturesTests
     }
 
     [Test]
-    public async Task From_ThrowsException_WhenInputIsZero()
+    public async Task From_ReturnsZero_WhenInputIsZero()
     {
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => { _ = IntClassWithAllFeatures.From(0); });
+        var result = IntClassWithAllFeatures.From(0);
+        
+        await Assert.That(result.Value).IsEqualTo(0);
     }
 
     [Test]

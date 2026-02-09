@@ -78,31 +78,31 @@ public partial record struct IntRecordStructWithValidation
 [Primify<int>]
 public partial struct IntStructWithAllFeatures
 {
-    private static int Normalize(int value) => value < 1 ? -1 : value;
+    private static int Normalize(int value) => value < 0 ? 0 : value;
     private static void Validate(int value)
     {
-        if (value < 0)
+        if (value > 100)
         {
             throw new ArgumentOutOfRangeException(nameof(value));
         }
     }
     
-    public static IntStructWithAllFeatures Empty => new(-1);
+    public static IntStructWithAllFeatures Empty => new(0);
 }
 
 [Primify<int>]
 public partial record struct IntRecordStructWithAllFeatures
 {
-    private static int Normalize(int value) => value < 1 ? -1 : value;
+    private static int Normalize(int value) => value < 0 ? 0 : value;
     private static void Validate(int value)
     {
-        if (value < 0)
+        if (value > 100)
         {
             throw new ArgumentOutOfRangeException(nameof(value));
         }
     }
     
-    public static IntRecordStructWithAllFeatures Empty => new(-1);
+    public static IntRecordStructWithAllFeatures Empty => new(0);
 }
 
 // Equality test types
