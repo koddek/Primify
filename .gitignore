@@ -907,7 +907,9 @@ NuGet.Config
 # AI
 SCRATCH.md
 AGENTS.md
-plans/agent-plan.md
+AGENTS-link.md
+skills/
+plans/
 CLAUDE.md
 GEMINI.md
 .tmp/
