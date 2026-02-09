@@ -78,31 +78,46 @@ public partial record class IntRecordClassWithValidation
 [Primify<int>]
 public partial class IntClassWithAllFeatures
 {
-    private static int Normalize(int value) => value < 1 ? -1 : value;
+    private static int Normalize(int value) => value < 0 ? 0 : value;
     private static void Validate(int value)
     {
-        if (value < 0)
+        if (value > 100)
         {
             throw new ArgumentOutOfRangeException(nameof(value));
         }
     }
     
-    public static IntClassWithAllFeatures Empty => new(-1);
+    public static IntClassWithAllFeatures Empty => new(0);
 }
 
 [Primify<int>]
 public partial record class IntRecordClassWithAllFeatures
 {
-    private static int Normalize(int value) => value < 1 ? -1 : value;
+    private static int Normalize(int value) => value < 0 ? 0 : value;
     private static void Validate(int value)
     {
-        if (value < 0)
+        if (value > 100)
         {
             throw new ArgumentOutOfRangeException(nameof(value));
         }
     }
     
-    public static IntRecordClassWithAllFeatures Empty => new(-1);
+    public static IntRecordClassWithAllFeatures Empty => new(0);
+}
+
+// Class with normalization + validation to prove normalize runs first
+[Primify<string>]
+public partial class StringClassWithNormalizeAndValidate
+{
+    private static string Normalize(string value) => value.Trim();
+
+    private static void Validate(string value)
+    {
+        if (value.Length > 3)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
 }
 
 // Equality test types

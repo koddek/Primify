@@ -1,0 +1,1 @@
+/Users/omoi/.codex/AGENTS.md
