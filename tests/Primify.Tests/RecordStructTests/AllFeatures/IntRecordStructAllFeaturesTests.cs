@@ -40,9 +40,8 @@ public class IntRecordStructAllFeaturesTests
     }
 
     [Test]
-    public async Task From_ReturnsNegativeOne_WhenInputIsZero()
+    public async Task From_ThrowsException_WhenInputIsZero()
     {
-        var result = IntRecordStructWithAllFeatures.From(0);
-        await Assert.That(result.Value).IsEqualTo(-1);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => { _ = IntRecordStructWithAllFeatures.From(0); });
     }
 }
