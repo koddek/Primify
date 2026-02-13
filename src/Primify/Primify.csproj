@@ -3,7 +3,7 @@
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.9.3</Version>
+        <Version>1.9.4</Version>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
@@ -23,9 +23,12 @@
 
         <Analyzer Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\Flowgen.dll" />
 
-        <!-- Pack ALL DLLs from the generator output (Generator + Flowgen) -->
-        <!-- Use a wildcard *.dll to catch the generator AND its dependency -->
-        <None Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\*.dll"
+        <!-- Pack only required analyzer binaries to avoid shipping Roslyn runtime assemblies -->
+        <None Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\Primify.Generators.dll"
+              Pack="true"
+              PackagePath="analyzers/dotnet/cs"
+              Visible="false"/>
+        <None Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\Flowgen.dll"
               Pack="true"
               PackagePath="analyzers/dotnet/cs"
               Visible="false"/>
