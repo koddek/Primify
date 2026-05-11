@@ -2,8 +2,6 @@ using Flowgen;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using System.Linq;
-
 namespace Primify.Generators;
 
 [Generator]
@@ -69,7 +67,8 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             IsRecord: node is RecordDeclarationSyntax,
             HasNormalize: hasNormalize,
             HasValidate: hasValidate,
-            Location: node.Identifier.GetLocation()
+            Location: node.Identifier.GetLocation(),
+            ContainingTypes: GetContainingTypes(node)
         );
     }
 
@@ -101,8 +100,62 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             model.Location, 
             model.ClassName));
 
+        if (model.HasUnsupportedContainingType)
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.ContainingTypeMustBePartial,
+                model.Location,
+                model.TypeName));
+
+            return;
+        }
+
         var source = PrimifyRenderer.Render(model);
-        context.AddSource($"{model.Namespace}.{model.ClassName}.g.cs", source);
+        context.AddSource(model.HintName, source);
+    }
+
+    private static EquatableArray<ContainingTypeModel> GetContainingTypes(TypeDeclarationSyntax node)
+    {
+        var containingTypes = new Stack<ContainingTypeModel>();
+
+        for (var parent = node.Parent; parent is not null; parent = parent.Parent)
+        {
+            if (parent is not TypeDeclarationSyntax containingType)
+            {
+                continue;
+            }
+
+            containingTypes.Push(new ContainingTypeModel(
+                Declaration: GetContainingTypeDeclaration(containingType),
+                Name: containingType.Identifier.ValueText,
+                TypeReferenceName: $"{containingType.Identifier.ValueText}{containingType.TypeParameterList}",
+                IsPartial: containingType.Modifiers.Any(SyntaxKind.PartialKeyword)));
+        }
+
+        return containingTypes.Count == 0
+            ? EquatableArray<ContainingTypeModel>.Empty
+            : new EquatableArray<ContainingTypeModel>(containingTypes.ToArray());
+    }
+
+    private static string GetContainingTypeDeclaration(TypeDeclarationSyntax node)
+    {
+        var modifiers = string.Join(" ", node.Modifiers.Select(modifier => modifier.Text));
+        var keyword = node switch
+        {
+            InterfaceDeclarationSyntax => "interface",
+            ClassDeclarationSyntax => "class",
+            StructDeclarationSyntax => "struct",
+            RecordDeclarationSyntax record => record.ClassOrStructKeyword.IsKind(SyntaxKind.StructKeyword)
+                ? "record struct"
+                : "record",
+            _ => "class"
+        };
+
+        var constraints = node.ConstraintClauses.Count == 0
+            ? string.Empty
+            : $" {string.Join(" ", node.ConstraintClauses.Select(clause => clause.ToString()))}";
+
+        return $"{modifiers} {keyword} {node.Identifier.ValueText}{node.TypeParameterList}{constraints}".Trim();
     }
 
     private static bool IsPrivateStaticNormalizer(IMethodSymbol method)

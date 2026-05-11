@@ -33,4 +33,12 @@ public static class Diagnostics
         category: "Usage",
         defaultSeverity: DiagnosticSeverity.Info,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ContainingTypeMustBePartial = new(
+        id: "PRIT005",
+        title: "Containing Type Must Be Partial",
+        messageFormat: "Nested Primify type '{0}' requires every containing type to be declared partial",
+        category: "TypeValidation",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
