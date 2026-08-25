@@ -4,6 +4,14 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Primify.Generators;
 
+/// <summary>
+/// Incremental source generator completing <c>[Primify&lt;T&gt;]</c>-annotated partial types into
+/// validated primitive wrappers. For each annotated type it emits a generated part containing the
+/// <c>Value</c> property, private constructor, <c>From</c>/<c>TryFrom</c> factories, conversion
+/// operators, serializer attributes, equality members where the kind needs them, and a LiteDB
+/// mapping initializer. Diagnostics: PRIT001 invalid wrapped type, PRIT002/PRIT003 hook signature
+/// errors, PRIT004 non-partial containing type.
+/// </summary>
 [Generator]
 public sealed class PrimifyGenerator : IIncrementalGenerator
 {
