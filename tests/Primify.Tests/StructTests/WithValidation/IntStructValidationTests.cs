@@ -32,4 +32,10 @@ public class IntStructValidationTests
     {
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => { _ = IntStructWithValidation.From(-10); });
     }
+
+    [Test]
+    public async Task ExplicitCast_ThrowsException_WhenValueIsInvalid()
+    {
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => { _ = (IntStructWithValidation)(-1); });
+    }
 }

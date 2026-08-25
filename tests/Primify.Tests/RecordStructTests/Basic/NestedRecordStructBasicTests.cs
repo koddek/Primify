@@ -23,10 +23,10 @@ public class NestedRecordStructBasicTests
     }
 
     [Test]
-    public async Task ImplicitConversions_Work_ForNestedIds()
+    public async Task ExplicitConversions_Work_ForNestedIds()
     {
-        IUsers.Male.MaleId maleId = "male-2";
-        IUsers.Female.FemaleId femaleId = "female-2";
+        var maleId = (IUsers.Male.MaleId)"male-2";
+        var femaleId = (IUsers.Female.FemaleId)"female-2";
 
         string maleValue = maleId;
         string femaleValue = femaleId;
@@ -38,8 +38,8 @@ public class NestedRecordStructBasicTests
     [Test]
     public async Task NestedIds_CanBeAssigned_ToContainingTypes()
     {
-        var male = new IUsers.Male { Id = "male-3" };
-        var female = new IUsers.Female { Id = "female-3" };
+        var male = new IUsers.Male { Id = (IUsers.Male.MaleId)"male-3" };
+        var female = new IUsers.Female { Id = (IUsers.Female.FemaleId)"female-3" };
 
         await Assert.That(male.Id.Value).IsEqualTo("male-3");
         await Assert.That(female.Id.Value).IsEqualTo("female-3");

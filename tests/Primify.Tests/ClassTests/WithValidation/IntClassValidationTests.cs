@@ -60,11 +60,8 @@ public class IntClassValidationTests
     }
 
     [Test]
-    public async Task ImplicitConversion_Succeeds_WhenValueIsValid()
+    public async Task ExplicitCast_ThrowsException_WhenValueIsInvalid()
     {
-        int value = 42;
-        IntClassWithValidation result = value;
-        
-        await Assert.That(result.Value).IsEqualTo(value);
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => { _ = (IntClassWithValidation)(-1); });
     }
 }

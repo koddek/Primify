@@ -12,15 +12,6 @@ public class IntRecordStructBasicTests
     }
 
     [Test]
-    public async Task ImplicitConversion_Succeeds_WhenSettingValue()
-    {
-        int expectedValue = 1001;
-        IntRecordStruct result = expectedValue;
-
-        await Assert.That(result.Value).IsEqualTo(expectedValue);
-    }
-
-    [Test]
     public async Task Value_AccessesCorrectValue()
     {
         var value = 123;

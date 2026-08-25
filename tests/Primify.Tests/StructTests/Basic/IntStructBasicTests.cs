@@ -14,15 +14,6 @@ public class IntStructBasicTests
     }
 
     [Test]
-    public async Task ImplicitConversion_Succeeds_WhenSettingValue()
-    {
-        int expectedValue = 1001;
-        IntStruct result = expectedValue;
-
-        await Assert.That(result.Value).IsEqualTo(expectedValue);
-    }
-
-    [Test]
     public async Task ImplicitConversion_Succeeds_WhenDereferencing()
     {
         int expectedValue = 1001;
