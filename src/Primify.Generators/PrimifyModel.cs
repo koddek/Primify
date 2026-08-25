@@ -1,5 +1,7 @@
 namespace Primify.Generators;
 
+using Microsoft.CodeAnalysis.Text;
+
 /// <summary>
 /// Represents the data required to generate a Primify wrapper.
 /// This is a record to ensure value-based equality for Roslyn caching.
@@ -7,13 +9,16 @@ namespace Primify.Generators;
 public record PrimifyModel(
     string Namespace,
     string ClassName,
-    string Keyword, // class, struct, record struct
-    string WrappedType, // int, string, Guid
+    string Keyword, // class, struct, record class, record struct
+    string WrappedType, // int, string, Guid, ...
+    bool WrappedTypeIsReferenceType,
     bool IsValueType,
     bool IsRecord,
     bool HasNormalize,
     bool HasValidate,
-    Location Location, // For reporting diagnostics
+    bool InvalidNormalizeSignature,
+    bool InvalidValidateSignature,
+    DiagnosticLocation Location,
     EquatableArray<ContainingTypeModel> ContainingTypes
 )
 {
@@ -34,6 +39,23 @@ public record PrimifyModel(
         : $"{Namespace}.{TypeName}.g.cs";
 
     public bool HasUnsupportedContainingType => ContainingTypes.Any(type => !type.IsPartial);
+}
+
+/// <summary>
+/// An equatable snapshot of a diagnostic position. Holding <see cref="Location"/>
+/// directly would defeat the value-based equality required for incremental caching.
+/// </summary>
+public readonly record struct DiagnosticLocation(
+    string FilePath,
+    TextSpan SourceSpan,
+    LinePositionSpan LineSpan)
+{
+    public static DiagnosticLocation From(Location location) => new(
+        location.SourceTree?.FilePath ?? string.Empty,
+        location.SourceSpan,
+        location.GetLineSpan().Span);
+
+    public Location ToLocation() => Location.Create(FilePath, SourceSpan, LineSpan);
 }
 
 public record ContainingTypeModel(

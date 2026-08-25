@@ -5,37 +5,29 @@ public static class Diagnostics
     public static readonly DiagnosticDescriptor InvalidType = new(
         id: "PRIT001",
         title: "Invalid Primify Type",
-        messageFormat: "Could not determine wrapped type for '{0}'.",
+        messageFormat: "Could not determine wrapped type for '{0}'",
         category: "TypeValidation",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    public static readonly DiagnosticDescriptor ImplementValidate = new(
-        id: "PRIU002",
-        title: "Validation Available",
-        messageFormat: "Custom validation can be added by implementing 'private static partial void Validate({0} value)'",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Info,
+    public static readonly DiagnosticDescriptor InvalidNormalizeSignature = new(
+        id: "PRIT002",
+        title: "Invalid Normalize Signature",
+        messageFormat: "'{0}' must declare 'private static {1} Normalize({1} value)' for normalization to run",
+        category: "TypeValidation",
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
-    public static readonly DiagnosticDescriptor ImplementNormalize = new(
-        id: "PRIU003",
-        title: "Normalization Available",
-        messageFormat: "Value sanitization can be added by implementing 'private static partial {0} Normalize({0} value)'.",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Info,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor AddFactory = new(
-        id: "PRIU004",
-        title: "Factory Properties Available",
-        messageFormat: "Predefined instances can be added via the private constructor: 'public static {0} Default {{ get; }} = new {0}(...);'",
-        category: "Usage",
-        defaultSeverity: DiagnosticSeverity.Info,
+    public static readonly DiagnosticDescriptor InvalidValidateSignature = new(
+        id: "PRIT003",
+        title: "Invalid Validate Signature",
+        messageFormat: "'{0}' must declare 'private static void Validate({1} value)' for validation to run",
+        category: "TypeValidation",
+        defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
 
     public static readonly DiagnosticDescriptor ContainingTypeMustBePartial = new(
-        id: "PRIT005",
+        id: "PRIT004",
         title: "Containing Type Must Be Partial",
         messageFormat: "Nested Primify type '{0}' requires every containing type to be declared partial",
         category: "TypeValidation",

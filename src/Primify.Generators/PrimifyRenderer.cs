@@ -1,11 +1,13 @@
 namespace Primify.Generators;
 
+using System.Text;
+
 public static class PrimifyRenderer
 {
     public static string Render(PrimifyModel model)
     {
         var wrapper = RenderWrapper(model);
-        var liteDb = GenerateLiteDbInitializer(model);
+        var liteDb = RenderLiteDbInitializer(model);
 
         if (model.ContainingTypes.IsEmpty)
         {
@@ -46,39 +48,129 @@ public static class PrimifyRenderer
 
     private static string RenderWrapper(PrimifyModel model)
     {
-        var finalModifier = model.IsValueType ? "readonly" : "sealed";
+        var name = model.ClassName;
+        var type = model.WrappedType;
+        var modifier = model.IsValueType ? "readonly" : "sealed";
 
-        var equalityMembers = Indent(GenerateEqualityMembers(model));
-        var implicitCasting = Indent(GenerateImplicitCasting(model));
-        var implicitExplicitCasting = Indent(GenerateImplicitExplicitCasting(model));
+        var sb = new StringBuilder();
+        sb.AppendLine($"[System.Text.Json.Serialization.JsonConverter(typeof(SystemTextJsonConverter<{name}, {type}>))]");
+        sb.AppendLine($"[Newtonsoft.Json.JsonConverter(typeof(NewtonsoftJsonConverter<{name}, {type}>))]");
+        sb.AppendLine($"{modifier} partial {model.Keyword} {name} : IPrimify<{name}, {type}>, IEquatable<{name}>");
+        sb.AppendLine("{");
+        sb.AppendLine($"    public {type} Value {{ get; }}");
+        sb.AppendLine();
+        sb.AppendLine($"    private {name}({type} value) => Value = value;");
+        sb.AppendLine();
+        AppendFrom(sb, model);
+        sb.AppendLine();
+        AppendBsonCasting(sb, model);
+        sb.AppendLine();
+        AppendPrimitiveConversions(sb, model);
+        if (!model.IsRecord)
+        {
+            var toStringBody = model.WrappedTypeIsReferenceType
+                ? "Value?.ToString() ?? string.Empty"
+                : "Value.ToString()";
+            sb.AppendLine();
+            sb.AppendLine($"    public override string ToString() => {toStringBody};");
+        }
 
-        return $$"""
-                 [System.Text.Json.Serialization.JsonConverter(typeof(SystemTextJsonConverter<{{model.ClassName}}, {{model.WrappedType}}>) )]
-                 [Newtonsoft.Json.JsonConverter(typeof(NewtonsoftJsonConverter<{{model.ClassName}}, {{model.WrappedType}}>) )]
-                 [LiteDbSerializable]
-                 {{finalModifier}} partial {{model.Keyword}} {{model.ClassName}} : IPrimify<{{model.ClassName}}, {{model.WrappedType}}>, IEquatable<{{model.ClassName}}>
-                 {
-                     public {{model.WrappedType}} Value { get; }
-                     
-                     private {{model.ClassName}}({{model.WrappedType}} value) => Value = value;
+        var equalityMembers = GenerateEqualityMembers(model);
+        if (!string.IsNullOrWhiteSpace(equalityMembers))
+        {
+            sb.AppendLine();
+            sb.Append(Indent(equalityMembers));
+            sb.AppendLine();
+        }
 
-                      public static {{model.ClassName}} From({{model.WrappedType}} value)
-                      {
-                      var processedValue = value;
-                      {{(model.HasNormalize ? "processedValue = Normalize(processedValue);" : string.Empty)}}
-                      {{(model.HasValidate ? "Validate(processedValue);" : string.Empty)}}
-                          return new {{model.ClassName}}(processedValue);
-                      }
-                     
-                     {{implicitCasting}}
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
 
-                     {{implicitExplicitCasting}}
-                     
-                     public override string ToString() => Value.ToString();
-                     
-                     {{equalityMembers}}
-                 }
-                 """;
+    private static void AppendFrom(StringBuilder sb, PrimifyModel model)
+    {
+        var name = model.ClassName;
+        var type = model.WrappedType;
+
+        sb.AppendLine($"    public static {name} From({type} value)");
+        sb.AppendLine("    {");
+        if (model.WrappedTypeIsReferenceType)
+        {
+            sb.AppendLine("        if (value is null)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            throw new ArgumentNullException(nameof(value));");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("        var processedValue = value;");
+        if (model.HasNormalize)
+        {
+            sb.AppendLine("        processedValue = Normalize(processedValue);");
+        }
+
+        if (model.HasValidate)
+        {
+            sb.AppendLine("        Validate(processedValue);");
+        }
+
+        sb.AppendLine($"        return new {name}(processedValue);");
+        sb.AppendLine("    }");
+    }
+
+    private static void AppendPrimitiveConversions(StringBuilder sb, PrimifyModel model)
+    {
+        var name = model.ClassName;
+        var type = model.WrappedType;
+
+        // primitive -> wrapper runs normalization/validation and can throw; it must be explicit.
+        sb.AppendLine($"    public static explicit operator {name}({type} value) => From(value);");
+        sb.AppendLine($"    public static implicit operator {type}({name} value) => value.Value;");
+    }
+
+    private static void AppendBsonCasting(StringBuilder sb, PrimifyModel model)
+    {
+        var name = model.ClassName;
+        var type = model.WrappedType;
+
+        string toBson;
+        switch (type)
+        {
+            case "System.DateOnly":
+                toBson = "new LiteDB.BsonValue(value.Value.ToDateTime(System.TimeOnly.MinValue))";
+                break;
+
+            case "System.TimeOnly":
+                toBson = "new LiteDB.BsonValue(value.Value.Ticks)";
+                break;
+
+            case "System.DateTimeOffset":
+                toBson = "new LiteDB.BsonDocument\n                {\n                    [\"DateTime\"] = value.Value.UtcDateTime,\n                    [\"Offset\"] = value.Value.Offset.Ticks\n                }";
+                break;
+
+            default:
+                toBson = "new LiteDB.BsonValue(value.Value)";
+                break;
+        }
+
+        sb.AppendLine($"    public static implicit operator LiteDB.BsonValue({name} value) => {toBson};");
+
+        if (type == "System.DateTimeOffset")
+        {
+            sb.AppendLine($"    public static implicit operator {name}(LiteDB.BsonValue value)");
+            sb.AppendLine("    {");
+            sb.AppendLine("        var doc = value.AsDocument;");
+            sb.AppendLine("        var utcDateTime = doc[\"DateTime\"].AsDateTime;");
+            sb.AppendLine("        var offset = new System.TimeSpan(doc[\"Offset\"].AsInt64);");
+            sb.AppendLine("        var utcTime = new System.DateTimeOffset(utcDateTime);");
+            sb.AppendLine("        var originalTime = utcTime.ToOffset(offset);");
+            sb.AppendLine($"        return {name}.From(originalTime);");
+            sb.AppendLine("    }");
+        }
+        else
+        {
+            sb.AppendLine($"    public static implicit operator {name}(LiteDB.BsonValue value) => {name}.From(({type})System.Convert.ChangeType(value.RawValue, typeof({type})));");
+        }
     }
 
     private static string RenderContainingTypes(PrimifyModel model, string wrapper)
@@ -115,7 +207,6 @@ public static class PrimifyRenderer
         var (equalsExpr, hashCodeExpr) = GetEqualityExpressions(arg);
 
         // For record types, let the compiler generate optimized equality
-        // Record types already have compiler-generated equality that's highly optimized
         if (model.IsRecord)
         {
             return string.Empty;
@@ -139,20 +230,20 @@ public static class PrimifyRenderer
         }
 
         return $$"""
-                  public override bool Equals(object? obj) => obj is {{name}} other && Equals(other);
+                 public override bool Equals(object? obj) => obj is {{name}} other && Equals(other);
 
-                  public bool Equals({{name}}? other)
-                  {
-                      if (ReferenceEquals(null, other)) return false;
-                      if (ReferenceEquals(this, other)) return true;
-                      return {{equalsExpr("Value", "other.Value")}};
-                  }
+                 public bool Equals({{name}}? other)
+                 {
+                     if (ReferenceEquals(null, other)) return false;
+                     if (ReferenceEquals(this, other)) return true;
+                     return {{equalsExpr("Value", "other.Value")}};
+                 }
 
-                  public override int GetHashCode() => {{hashCodeExpr("Value")}};
+                 public override int GetHashCode() => {{hashCodeExpr("Value")}};
 
-                  public static bool operator ==({{name}}? left, {{name}}? right) => ReferenceEquals(left, right) || (left is not null && left.Equals(right));
-                  public static bool operator !=({{name}}? left, {{name}}? right) => !(left == right);
-                  """;
+                 public static bool operator ==({{name}}? left, {{name}}? right) => ReferenceEquals(left, right) || (left is not null && left.Equals(right));
+                 public static bool operator !=({{name}}? left, {{name}}? right) => !(left == right);
+                 """;
     }
 
     private static (Func<string, string, string> equalsExpr, Func<string, string> hashCodeExpr) GetEqualityExpressions(string wrappedType)
@@ -205,71 +296,7 @@ public static class PrimifyRenderer
         };
     }
 
-    private static string GenerateImplicitExplicitCasting(PrimifyModel model) =>
-        $$"""
-          public static implicit operator {{model.ClassName}}({{model.WrappedType}} value) => From(value);
-          public static implicit operator {{model.WrappedType}}({{model.ClassName}} value) => value.Value;
-          """;
-
-    private static string GenerateImplicitCasting(PrimifyModel model)
-    {
-        string name = model.ClassName;
-        string arg = model.WrappedType;
-        string toBson;
-        string fromBsonImplementation;
-
-        switch (arg)
-        {
-            case "System.DateOnly":
-                toBson = "new LiteDB.BsonValue(value.Value.ToDateTime(System.TimeOnly.MinValue))";
-                fromBsonImplementation = $"=> {name}.From(System.DateOnly.FromDateTime(value.AsDateTime));";
-                break;
-
-            case "System.TimeOnly":
-                toBson = "new LiteDB.BsonValue(value.Value.Ticks)";
-                fromBsonImplementation = $"=> {name}.From(new System.TimeOnly(value.AsInt64));";
-                break;
-
-            case "System.DateTimeOffset":
-                toBson = """
-                         new LiteDB.BsonDocument
-                         {
-                             ["DateTime"] = value.Value.UtcDateTime,
-                             ["Offset"] = value.Value.Offset.Ticks
-                         }
-                         """;
-
-                // We must indent the multi-line body correctly
-                fromBsonImplementation = $$"""
-                                           {
-                                               var doc = value.AsDocument;
-                                               var utcDateTime = doc["DateTime"].AsDateTime;
-                                               var offset = new System.TimeSpan(doc["Offset"].AsInt64);
-
-                                               // Create a UTC DateTimeOffset first, then convert to the original offset
-                                               var utcTime = new System.DateTimeOffset(utcDateTime);
-                                               var originalTime = utcTime.ToOffset(offset);
-
-                                               return {{name}}.From(originalTime);
-                                           }
-                                           """;
-                break;
-
-            default:
-                toBson = "new LiteDB.BsonValue(value.Value)";
-                fromBsonImplementation =
-                    $"=> {name}.From(({arg})System.Convert.ChangeType(value.RawValue, typeof({arg})));";
-                break;
-        }
-
-        return $$"""
-                 // Casting for BSON
-                 public static implicit operator LiteDB.BsonValue({{name}} value) => {{toBson}};
-                 public static implicit operator {{name}}(LiteDB.BsonValue value) {{fromBsonImplementation}}
-                 """;
-    }
-
-    private static string GenerateLiteDbInitializer(PrimifyModel model)
+    private static string RenderLiteDbInitializer(PrimifyModel model)
     {
         string name = model.FullyQualifiedTypeName;
         string initializerName = SanitizeIdentifier($"{model.TypeName}LiteDbInitializer");
@@ -290,17 +317,16 @@ public static class PrimifyRenderer
                 break;
 
             case "System.DateTimeOffset":
-                // We format this manually to look decent in the generated file
                 serializeCode = """
-                                 wrapper => new LiteDB.BsonDocument
-                                     {
-                                         ["DateTime"] = wrapper.Value.UtcDateTime,
-                                         ["Offset"] = wrapper.Value.Offset.Ticks
-                                     }
-                                 """;
+                                wrapper => new LiteDB.BsonDocument
+                                    {
+                                        ["DateTime"] = wrapper.Value.UtcDateTime,
+                                        ["Offset"] = wrapper.Value.Offset.Ticks
+                                    }
+                                """;
 
                 deserializeCode = $$"""
-                                     bson => 
+                                     bson =>
                                          {
                                              var doc = bson.AsDocument;
                                              var utcDateTime = doc["DateTime"].AsDateTime;
