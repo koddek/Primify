@@ -16,6 +16,14 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- Agent-facing skill travels with the package; tools can read it from the extracted package folder. -->
+        <None Include="..\..\skills\primify\SKILL.md"
+              Pack="true"
+              PackagePath="skills/primify/"
+              Visible="false"/>
+    </ItemGroup>
+
+    <ItemGroup>
         <!-- Keep the reference for development support -->
         <ProjectReference Include="..\Primify.Generators\Primify.Generators.csproj"
                           OutputItemType="Analyzer"
