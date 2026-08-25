@@ -905,6 +905,7 @@ local.props
 NuGet.Config
 
 # AI
+.agent
 SCRATCH.md
 AGENTS.md
 AGENTS-link.md
