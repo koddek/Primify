@@ -120,6 +120,21 @@ public partial class StringClassWithNormalizeAndValidate
     }
 }
 
+// Record class with normalization + validation to prove normalize runs first
+[Primify<string>]
+public partial record class StringRecordClassWithNormalizeAndValidate
+{
+    private static string Normalize(string value) => value.Trim();
+
+    private static void Validate(string value)
+    {
+        if (value.Length > 3)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
+}
+
 // Equality test types
 [Primify<int>]
 public partial class ClassId;

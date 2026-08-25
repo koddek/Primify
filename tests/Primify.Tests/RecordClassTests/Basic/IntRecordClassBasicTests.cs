@@ -65,4 +65,12 @@ public class IntRecordClassBasicTests
 
         await Assert.That(wrapper.Value).IsEqualTo(value);
     }
+
+    [Test]
+    public async Task ToString_ReflectsUnderlyingValue()
+    {
+        var wrapper = IntRecordClass.From(1001);
+
+        await Assert.That(wrapper.ToString()).IsEqualTo("IntRecordClass { Value = 1001 }");
+    }
 }

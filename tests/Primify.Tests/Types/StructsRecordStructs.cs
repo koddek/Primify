@@ -16,6 +16,20 @@ public partial record struct IntRecordStruct;
 [Primify<string>]
 public partial record struct StringRecordStruct;
 
+[Primify<string>]
+public readonly partial record struct StringRecordStructWithNormalizeAndValidate
+{
+    private static string Normalize(string value) => value.Trim();
+
+    private static void Validate(string value)
+    {
+        if (value.Length > 3)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
+}
+
 // Readonly structs
 [Primify<int>]
 public readonly partial struct ReadonlyIntStruct;
@@ -103,6 +117,21 @@ public partial record struct IntRecordStructWithAllFeatures
     }
     
     public static IntRecordStructWithAllFeatures Empty => new(0);
+}
+
+// Structs with normalization + validation to prove normalize runs first
+[Primify<string>]
+public partial struct StringStructWithNormalizeAndValidate
+{
+    private static string Normalize(string value) => value.Trim();
+
+    private static void Validate(string value)
+    {
+        if (value.Length > 3)
+        {
+            throw new ArgumentOutOfRangeException(nameof(value));
+        }
+    }
 }
 
 // Equality test types

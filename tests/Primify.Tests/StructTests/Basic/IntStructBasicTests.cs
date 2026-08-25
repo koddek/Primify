@@ -67,4 +67,12 @@ public class IntStructBasicTests
         var deserialized = Newtonsoft.Json.JsonConvert.DeserializeObject<IntStruct>(json);
         await Assert.That(deserialized.Value).IsEqualTo(expectedValue);
     }
+
+    [Test]
+    public async Task ToString_ReflectsUnderlyingValue()
+    {
+        var wrapper = IntStruct.From(1001);
+
+        await Assert.That(wrapper.ToString()).IsEqualTo(wrapper.Value.ToString());
+    }
 }
