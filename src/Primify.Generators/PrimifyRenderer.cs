@@ -1,11 +1,17 @@
 namespace Primify.Generators;
 
+using System.Text;
+
+/// <summary>
+/// Renders the generated source text for a <see cref="PrimifyModel"/>: the wrapper declaration,
+/// its members, and the file-scoped LiteDB registration initializer.
+/// </summary>
 public static class PrimifyRenderer
 {
     public static string Render(PrimifyModel model)
     {
         var wrapper = RenderWrapper(model);
-        var liteDb = GenerateLiteDbInitializer(model);
+        var liteDb = RenderLiteDbInitializer(model);
 
         if (model.ContainingTypes.IsEmpty)
         {
@@ -15,7 +21,6 @@ public static class PrimifyRenderer
 
                      using System;
                      using System.Runtime.CompilerServices;
-                     using LiteDB;
                      using Primify.Converters;
 
                      namespace {{model.Namespace}};
@@ -32,7 +37,6 @@ public static class PrimifyRenderer
 
                  using System;
                  using System.Runtime.CompilerServices;
-                 using LiteDB;
                  using Primify.Converters;
 
                  namespace {{model.Namespace}}
@@ -46,39 +50,126 @@ public static class PrimifyRenderer
 
     private static string RenderWrapper(PrimifyModel model)
     {
-        var finalModifier = model.IsValueType ? "readonly" : "sealed";
+        var name = model.ClassName;
+        var type = model.WrappedType;
+        var modifier = model.IsValueType ? "readonly" : "sealed";
 
-        var equalityMembers = Indent(GenerateEqualityMembers(model));
-        var implicitCasting = Indent(GenerateImplicitCasting(model));
-        var implicitExplicitCasting = Indent(GenerateImplicitExplicitCasting(model));
+        var sb = new StringBuilder();
+        sb.AppendLine("[System.Diagnostics.DebuggerDisplay(\"{Value}\")]");
+        sb.AppendLine($"[System.Text.Json.Serialization.JsonConverter(typeof(SystemTextJsonConverter<{name}, {type}>))]");
+        sb.AppendLine($"[Newtonsoft.Json.JsonConverter(typeof(NewtonsoftJsonConverter<{name}, {type}>))]");
+        sb.AppendLine($"{modifier} partial {model.Keyword} {name} : IPrimify<{name}, {type}>, IEquatable<{name}>");
+        sb.AppendLine("{");
+        sb.AppendLine("    /// <summary>Gets the wrapped primitive value.</summary>");
+        sb.AppendLine($"    public {type} Value {{ get; }}");
+        sb.AppendLine();
+        sb.AppendLine($"    private {name}({type} value) => Value = value;");
+        sb.AppendLine();
+        AppendFrom(sb, model);
+        sb.AppendLine();
+        AppendTryFrom(sb, model);
+        sb.AppendLine();
+        AppendPrimitiveConversions(sb, model);
+        if (!model.IsRecord)
+        {
+            var toStringBody = model.WrappedTypeIsReferenceType
+                ? "Value?.ToString() ?? string.Empty"
+                : "Value.ToString()";
+            sb.AppendLine();
+            sb.AppendLine("    /// <summary>Returns the string form of the underlying value.</summary>");
+            sb.AppendLine($"    public override string ToString() => {toStringBody};");
+        }
 
-        return $$"""
-                 [System.Text.Json.Serialization.JsonConverter(typeof(SystemTextJsonConverter<{{model.ClassName}}, {{model.WrappedType}}>) )]
-                 [Newtonsoft.Json.JsonConverter(typeof(NewtonsoftJsonConverter<{{model.ClassName}}, {{model.WrappedType}}>) )]
-                 [LiteDbSerializable]
-                 {{finalModifier}} partial {{model.Keyword}} {{model.ClassName}} : IPrimify<{{model.ClassName}}, {{model.WrappedType}}>, IEquatable<{{model.ClassName}}>
-                 {
-                     public {{model.WrappedType}} Value { get; }
-                     
-                     private {{model.ClassName}}({{model.WrappedType}} value) => Value = value;
+        var equalityMembers = GenerateEqualityMembers(model);
+        if (!string.IsNullOrWhiteSpace(equalityMembers))
+        {
+            sb.AppendLine();
+            sb.Append(Indent(equalityMembers));
+            sb.AppendLine();
+        }
 
-                      public static {{model.ClassName}} From({{model.WrappedType}} value)
-                      {
-                      var processedValue = value;
-                      {{(model.HasNormalize ? "processedValue = Normalize(processedValue);" : string.Empty)}}
-                      {{(model.HasValidate ? "Validate(processedValue);" : string.Empty)}}
-                          return new {{model.ClassName}}(processedValue);
-                      }
-                     
-                     {{implicitCasting}}
+        sb.AppendLine("}");
+        return sb.ToString();
+    }
 
-                     {{implicitExplicitCasting}}
-                     
-                     public override string ToString() => Value.ToString();
-                     
-                     {{equalityMembers}}
-                 }
-                 """;
+    private static void AppendFrom(StringBuilder sb, PrimifyModel model)
+    {
+        var name = model.ClassName;
+        var type = model.WrappedType;
+
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Creates a validated instance by running the declaring type's Normalize hook");
+        sb.AppendLine("    /// followed by its Validate hook.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <param name=\"value\">The primitive value to wrap.</param>");
+        sb.AppendLine("    /// <returns>The validated wrapper instance.</returns>");
+        sb.AppendLine("    /// <exception cref=\"ArgumentException\">Thrown when validation rejects the value; also covers ArgumentNullException for null reference-type values.</exception>");
+        sb.AppendLine($"    public static {name} From({type} value)");
+        sb.AppendLine("    {");
+        if (model.WrappedTypeIsReferenceType)
+        {
+            sb.AppendLine("        if (value is null)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            throw new ArgumentNullException(nameof(value));");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+
+        sb.AppendLine("        var processedValue = value;");
+        if (model.HasNormalize)
+        {
+            sb.AppendLine("        processedValue = Normalize(processedValue);");
+        }
+
+        if (model.HasValidate)
+        {
+            sb.AppendLine("        Validate(processedValue);");
+        }
+
+        sb.AppendLine($"        return new {name}(processedValue);");
+        sb.AppendLine("    }");
+    }
+
+    private static void AppendTryFrom(StringBuilder sb, PrimifyModel model)
+    {
+        var name = model.ClassName;
+        var type = model.WrappedType;
+
+        sb.AppendLine("    /// <summary>");
+        sb.AppendLine("    /// Non-throwing alternative to <see cref=\"From\"/>. Applies the same Normalize and");
+        sb.AppendLine("    /// Validate hooks; returns false when validation throws an ArgumentException-derived");
+        sb.AppendLine("    /// exception.");
+        sb.AppendLine("    /// </summary>");
+        sb.AppendLine("    /// <param name=\"value\">The primitive value to wrap.</param>");
+        sb.AppendLine("    /// <param name=\"result\">The validated instance, or default when creation fails.</param>");
+        sb.AppendLine("    /// <returns>true when the value passed validation; otherwise false.</returns>");
+        sb.AppendLine($"    public static bool TryFrom({type} value, out {name} result)");
+        sb.AppendLine("    {");
+        sb.AppendLine("        try");
+        sb.AppendLine("        {");
+        sb.AppendLine("            result = From(value);");
+        sb.AppendLine("            return true;");
+        sb.AppendLine("        }");
+        sb.AppendLine("        catch (ArgumentException)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            result = default!;");
+        sb.AppendLine("            return false;");
+        sb.AppendLine("        }");
+        sb.AppendLine("    }");
+    }
+
+    private static void AppendPrimitiveConversions(StringBuilder sb, PrimifyModel model)
+    {
+        var name = model.ClassName;
+        var type = model.WrappedType;
+
+        // primitive -> wrapper runs normalization/validation and can throw; it must be explicit.
+        sb.AppendLine("    /// <summary>Wraps the primitive through the same normalize/validate pipeline as <see cref=\"From\"/>.</summary>");
+        sb.AppendLine("    /// <param name=\"value\">The primitive value to wrap.</param>");
+        sb.AppendLine($"    public static explicit operator {name}({type} value) => From(value);");
+        sb.AppendLine("    /// <summary>Returns the underlying primitive value.</summary>");
+        sb.AppendLine("    /// <param name=\"value\">The wrapper instance.</param>");
+        sb.AppendLine($"    public static implicit operator {type}({name} value) => value.Value;");
     }
 
     private static string RenderContainingTypes(PrimifyModel model, string wrapper)
@@ -115,7 +206,6 @@ public static class PrimifyRenderer
         var (equalsExpr, hashCodeExpr) = GetEqualityExpressions(arg);
 
         // For record types, let the compiler generate optimized equality
-        // Record types already have compiler-generated equality that's highly optimized
         if (model.IsRecord)
         {
             return string.Empty;
@@ -124,35 +214,47 @@ public static class PrimifyRenderer
         if (model.IsValueType)
         {
             return $$"""
+                     /// <summary>Determines whether the specified object wraps an equal value.</summary>
                      public override bool Equals(object? obj) => obj is {{name}} other && Equals(other);
 
+                     /// <summary>Determines whether the other instance wraps an equal value.</summary>
                      public bool Equals({{name}} other)
                      {
                          return {{equalsExpr("Value", "other.Value")}};
                      }
 
+                     /// <summary>Returns a hash code based on the underlying value.</summary>
                      public override int GetHashCode() => {{hashCodeExpr("Value")}};
 
+                     /// <summary>Compares two instances by their underlying values.</summary>
                      public static bool operator ==({{name}} left, {{name}} right) => left.Equals(right);
+
+                     /// <summary>Compares two instances by their underlying values.</summary>
                      public static bool operator !=({{name}} left, {{name}} right) => !(left == right);
                      """;
         }
 
         return $$"""
-                  public override bool Equals(object? obj) => obj is {{name}} other && Equals(other);
+                 /// <summary>Determines whether the specified object wraps an equal value.</summary>
+                 public override bool Equals(object? obj) => obj is {{name}} other && Equals(other);
 
-                  public bool Equals({{name}}? other)
-                  {
-                      if (ReferenceEquals(null, other)) return false;
-                      if (ReferenceEquals(this, other)) return true;
-                      return {{equalsExpr("Value", "other.Value")}};
-                  }
+                 /// <summary>Determines whether the other instance wraps an equal value.</summary>
+                 public bool Equals({{name}}? other)
+                 {
+                     if (ReferenceEquals(null, other)) return false;
+                     if (ReferenceEquals(this, other)) return true;
+                     return {{equalsExpr("Value", "other.Value")}};
+                 }
 
-                  public override int GetHashCode() => {{hashCodeExpr("Value")}};
+                 /// <summary>Returns a hash code based on the underlying value.</summary>
+                 public override int GetHashCode() => {{hashCodeExpr("Value")}};
 
-                  public static bool operator ==({{name}}? left, {{name}}? right) => ReferenceEquals(left, right) || (left is not null && left.Equals(right));
-                  public static bool operator !=({{name}}? left, {{name}}? right) => !(left == right);
-                  """;
+                 /// <summary>Compares two instances by their underlying values; null references are equal only to each other.</summary>
+                 public static bool operator ==({{name}}? left, {{name}}? right) => ReferenceEquals(left, right) || (left is not null && left.Equals(right));
+
+                 /// <summary>Compares two instances by their underlying values.</summary>
+                 public static bool operator !=({{name}}? left, {{name}}? right) => !(left == right);
+                 """;
     }
 
     private static (Func<string, string, string> equalsExpr, Func<string, string> hashCodeExpr) GetEqualityExpressions(string wrappedType)
@@ -205,119 +307,11 @@ public static class PrimifyRenderer
         };
     }
 
-    private static string GenerateImplicitExplicitCasting(PrimifyModel model) =>
-        $$"""
-          public static implicit operator {{model.ClassName}}({{model.WrappedType}} value) => From(value);
-          public static implicit operator {{model.WrappedType}}({{model.ClassName}} value) => value.Value;
-          """;
-
-    private static string GenerateImplicitCasting(PrimifyModel model)
-    {
-        string name = model.ClassName;
-        string arg = model.WrappedType;
-        string toBson;
-        string fromBsonImplementation;
-
-        switch (arg)
-        {
-            case "System.DateOnly":
-                toBson = "new LiteDB.BsonValue(value.Value.ToDateTime(System.TimeOnly.MinValue))";
-                fromBsonImplementation = $"=> {name}.From(System.DateOnly.FromDateTime(value.AsDateTime));";
-                break;
-
-            case "System.TimeOnly":
-                toBson = "new LiteDB.BsonValue(value.Value.Ticks)";
-                fromBsonImplementation = $"=> {name}.From(new System.TimeOnly(value.AsInt64));";
-                break;
-
-            case "System.DateTimeOffset":
-                toBson = """
-                         new LiteDB.BsonDocument
-                         {
-                             ["DateTime"] = value.Value.UtcDateTime,
-                             ["Offset"] = value.Value.Offset.Ticks
-                         }
-                         """;
-
-                // We must indent the multi-line body correctly
-                fromBsonImplementation = $$"""
-                                           {
-                                               var doc = value.AsDocument;
-                                               var utcDateTime = doc["DateTime"].AsDateTime;
-                                               var offset = new System.TimeSpan(doc["Offset"].AsInt64);
-
-                                               // Create a UTC DateTimeOffset first, then convert to the original offset
-                                               var utcTime = new System.DateTimeOffset(utcDateTime);
-                                               var originalTime = utcTime.ToOffset(offset);
-
-                                               return {{name}}.From(originalTime);
-                                           }
-                                           """;
-                break;
-
-            default:
-                toBson = "new LiteDB.BsonValue(value.Value)";
-                fromBsonImplementation =
-                    $"=> {name}.From(({arg})System.Convert.ChangeType(value.RawValue, typeof({arg})));";
-                break;
-        }
-
-        return $$"""
-                 // Casting for BSON
-                 public static implicit operator LiteDB.BsonValue({{name}} value) => {{toBson}};
-                 public static implicit operator {{name}}(LiteDB.BsonValue value) {{fromBsonImplementation}}
-                 """;
-    }
-
-    private static string GenerateLiteDbInitializer(PrimifyModel model)
+    private static string RenderLiteDbInitializer(PrimifyModel model)
     {
         string name = model.FullyQualifiedTypeName;
         string initializerName = SanitizeIdentifier($"{model.TypeName}LiteDbInitializer");
         string arg = model.WrappedType;
-        string serializeCode;
-        string deserializeCode;
-
-        switch (arg)
-        {
-            case "System.DateOnly":
-                serializeCode = "wrapper => new LiteDB.BsonValue(wrapper.Value.ToDateTime(System.TimeOnly.MinValue))";
-                deserializeCode = $"bson => {name}.From(System.DateOnly.FromDateTime(bson.AsDateTime))";
-                break;
-
-            case "System.TimeOnly":
-                serializeCode = "wrapper => new LiteDB.BsonValue(wrapper.Value.Ticks)";
-                deserializeCode = $"bson => {name}.From(new System.TimeOnly(bson.AsInt64))";
-                break;
-
-            case "System.DateTimeOffset":
-                // We format this manually to look decent in the generated file
-                serializeCode = """
-                                 wrapper => new LiteDB.BsonDocument
-                                     {
-                                         ["DateTime"] = wrapper.Value.UtcDateTime,
-                                         ["Offset"] = wrapper.Value.Offset.Ticks
-                                     }
-                                 """;
-
-                deserializeCode = $$"""
-                                     bson => 
-                                         {
-                                             var doc = bson.AsDocument;
-                                             var utcDateTime = doc["DateTime"].AsDateTime;
-                                             var offset = new System.TimeSpan(doc["Offset"].AsInt64);
-                                             var utcTime = new System.DateTimeOffset(utcDateTime);
-                                             var originalTime = utcTime.ToOffset(offset);
-                                             return {{name}}.From(originalTime);
-                                         }
-                                     """;
-                break;
-
-            default:
-                serializeCode = "wrapper => new LiteDB.BsonValue(wrapper.Value)";
-                deserializeCode =
-                    $"bson => {name}.From(({arg})System.Convert.ChangeType(bson.RawValue, typeof({arg})))";
-                break;
-        }
 
         return $$"""
                  file static class {{initializerName}}
@@ -325,10 +319,7 @@ public static class PrimifyRenderer
                      [System.Runtime.CompilerServices.ModuleInitializer]
                      internal static void Register()
                      {
-                         LiteDB.BsonMapper.Global.RegisterType<{{name}}>(
-                             serialize: {{serializeCode}},
-                             deserialize: {{deserializeCode}}
-                         );
+                         Primify.Converters.LiteDbMapping.Register<{{name}}, {{arg}}>();
                      }
                  }
                  """;

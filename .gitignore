@@ -908,7 +908,8 @@ NuGet.Config
 SCRATCH.md
 AGENTS.md
 AGENTS-link.md
-skills/
+skills/*
+!skills/primify
 plans/
 CLAUDE.md
 GEMINI.md

@@ -14,15 +14,6 @@ public class IntStructBasicTests
     }
 
     [Test]
-    public async Task ImplicitConversion_Succeeds_WhenSettingValue()
-    {
-        int expectedValue = 1001;
-        IntStruct result = expectedValue;
-
-        await Assert.That(result.Value).IsEqualTo(expectedValue);
-    }
-
-    [Test]
     public async Task ImplicitConversion_Succeeds_WhenDereferencing()
     {
         int expectedValue = 1001;
@@ -75,5 +66,13 @@ public class IntStructBasicTests
 
         var deserialized = Newtonsoft.Json.JsonConvert.DeserializeObject<IntStruct>(json);
         await Assert.That(deserialized.Value).IsEqualTo(expectedValue);
+    }
+
+    [Test]
+    public async Task ToString_ReflectsUnderlyingValue()
+    {
+        var wrapper = IntStruct.From(1001);
+
+        await Assert.That(wrapper.ToString()).IsEqualTo(wrapper.Value.ToString());
     }
 }

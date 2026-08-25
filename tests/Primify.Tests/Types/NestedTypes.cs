@@ -20,3 +20,21 @@ public partial interface IUsers
         public readonly partial record struct FemaleId;
     }
 }
+
+// Nested struct containing a Primify type
+public partial struct NestedStructContainer
+{
+    public InnerStructId Id { get; set; }
+
+    [Primify<int>]
+    public partial struct InnerStructId;
+}
+
+// Nested record class containing a Primify type
+public partial record class NestedRecordClassContainer
+{
+    public InnerRecordClassId Id { get; set; }
+
+    [Primify<string>]
+    public sealed partial record class InnerRecordClassId;
+}

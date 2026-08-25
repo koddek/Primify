@@ -12,15 +12,6 @@ public class IntRecordClassBasicTests
     }
 
     [Test]
-    public async Task ImplicitConversion_Succeeds_WhenSettingValue()
-    {
-        int expectedValue = 1001;
-        IntRecordClass result = expectedValue;
-
-        await Assert.That(result.Value).IsEqualTo(expectedValue);
-    }
-
-    [Test]
     public async Task ImplicitConversion_Succeeds_WhenDereferencing()
     {
         int expectedValue = 1001;
@@ -73,5 +64,13 @@ public class IntRecordClassBasicTests
         var wrapper = IntRecordClass.From(value);
 
         await Assert.That(wrapper.Value).IsEqualTo(value);
+    }
+
+    [Test]
+    public async Task ToString_ReflectsUnderlyingValue()
+    {
+        var wrapper = IntRecordClass.From(1001);
+
+        await Assert.That(wrapper.ToString()).IsEqualTo("IntRecordClass { Value = 1001 }");
     }
 }

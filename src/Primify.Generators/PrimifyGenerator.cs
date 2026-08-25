@@ -4,9 +4,20 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace Primify.Generators;
 
+/// <summary>
+/// Incremental source generator completing <c>[Primify&lt;T&gt;]</c>-annotated partial types into
+/// validated primitive wrappers. For each annotated type it emits a generated part containing the
+/// <c>Value</c> property, private constructor, <c>From</c>/<c>TryFrom</c> factories, conversion
+/// operators, serializer attributes, equality members where the kind needs them, and a LiteDB
+/// mapping initializer. Diagnostics: PRIT001 invalid wrapped type, PRIT002/PRIT003 hook signature
+/// errors, PRIT004 non-partial containing type.
+/// </summary>
 [Generator]
 public sealed class PrimifyGenerator : IIncrementalGenerator
 {
+    private const string AttributeMetadataName = "PrimifyAttribute`1";
+    private const string AttributeNamespace = "Primify.Attributes";
+
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         Flow.Create(context)
@@ -31,17 +42,18 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             return null;
         }
 
-        var attr = typeSymbol.GetAttributes()
-            .FirstOrDefault(a => a.AttributeClass?.Name == "PrimifyAttribute`1" ||
-                                 a.AttributeClass?.Name == "PrimifyAttribute");
+        var attr = typeSymbol.GetAttributes().FirstOrDefault(a =>
+            a.AttributeClass is INamedTypeSymbol attributeClass &&
+            attributeClass.MetadataName == AttributeMetadataName &&
+            attributeClass.ContainingNamespace.ToDisplayString() == AttributeNamespace);
 
         if (attr is null)
         {
             return null;
         }
 
-        var wrappedType = attr.AttributeClass?.TypeArguments.FirstOrDefault()?.ToDisplayString()
-            ?? "object";
+        var wrappedTypeSymbol = attr.AttributeClass?.TypeArguments.FirstOrDefault();
+        var wrappedType = wrappedTypeSymbol?.ToDisplayString() ?? "object";
 
         // Determine the keyword (class, struct, record class, record struct)
         var keyword = node switch
@@ -53,58 +65,69 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             _ => "class"
         };
 
-        // Check for Normalize and Validate methods (private static, to avoid public API surface)
-        var hasNormalize = typeSymbol.GetMembers("Normalize").OfType<IMethodSymbol>().Any(IsPrivateStaticNormalizer);
-        var hasValidate = typeSymbol.GetMembers("Validate").OfType<IMethodSymbol>().Any(IsPrivateStaticVoidValidator);
+        // Normalize/Validate hooks are private static members declared in the user's partial part.
+        var normalizeMembers = typeSymbol.GetMembers("Normalize").OfType<IMethodSymbol>().ToArray();
+        var hasNormalize = normalizeMembers.Any(m => IsNormalizer(m, wrappedTypeSymbol));
+        var invalidNormalize = !hasNormalize && normalizeMembers.Length > 0;
 
-        
+        var validateMembers = typeSymbol.GetMembers("Validate").OfType<IMethodSymbol>().ToArray();
+        var hasValidate = validateMembers.Any(m => IsValidator(m, wrappedTypeSymbol));
+        var invalidValidate = !hasValidate && validateMembers.Length > 0;
+
         return new PrimifyModel(
             Namespace: typeSymbol.ContainingNamespace.ToDisplayString(),
             ClassName: typeSymbol.Name,
             Keyword: keyword,
             WrappedType: wrappedType,
+            WrappedTypeIsReferenceType: wrappedTypeSymbol?.IsReferenceType == true,
             IsValueType: typeSymbol.IsValueType,
             IsRecord: node is RecordDeclarationSyntax,
             HasNormalize: hasNormalize,
             HasValidate: hasValidate,
-            Location: node.Identifier.GetLocation(),
+            InvalidNormalizeSignature: invalidNormalize,
+            InvalidValidateSignature: invalidValidate,
+            Location: DiagnosticLocation.From(node.Identifier.GetLocation()),
             ContainingTypes: GetContainingTypes(node)
         );
     }
 
     private static void GenerateCode(SourceProductionContext context, PrimifyModel model)
     {
-        // Report diagnostics
+        var location = model.Location.ToLocation();
+
         if (model.WrappedType == "object")
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.InvalidType,
-                model.Location,
+                location,
                 model.ClassName));
+
+            return;
         }
 
-        if (!model.HasValidate)
+        if (model.InvalidNormalizeSignature)
+        {
             context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.ImplementValidate, 
-                model.Location, 
+                Diagnostics.InvalidNormalizeSignature,
+                location,
+                model.TypeName,
                 model.WrappedType));
+        }
 
-        if (!model.HasNormalize)
+        if (model.InvalidValidateSignature)
+        {
             context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.ImplementNormalize, 
-                model.Location, 
+                Diagnostics.InvalidValidateSignature,
+                location,
+                model.TypeName,
                 model.WrappedType));
-
-        context.ReportDiagnostic(Diagnostic.Create(
-            Diagnostics.AddFactory, 
-            model.Location, 
-            model.ClassName));
+        }
 
         if (model.HasUnsupportedContainingType)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.ContainingTypeMustBePartial,
-                model.Location,
+                location,
                 model.TypeName));
 
             return;
@@ -158,18 +181,19 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
         return $"{modifiers} {keyword} {node.Identifier.ValueText}{node.TypeParameterList}{constraints}".Trim();
     }
 
-    private static bool IsPrivateStaticNormalizer(IMethodSymbol method)
-    {
-        return method.DeclaredAccessibility == Accessibility.Private &&
-               method.IsStatic &&
-               method.Parameters.Length == 1;
-    }
+    private static bool IsNormalizer(IMethodSymbol method, ITypeSymbol? wrappedType) =>
+        wrappedType is not null &&
+        method.DeclaredAccessibility == Accessibility.Private &&
+        method.IsStatic &&
+        method.Parameters.Length == 1 &&
+        SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, wrappedType) &&
+        SymbolEqualityComparer.Default.Equals(method.ReturnType, wrappedType);
 
-    private static bool IsPrivateStaticVoidValidator(IMethodSymbol method)
-    {
-        return method.DeclaredAccessibility == Accessibility.Private &&
-               method.IsStatic &&
-               method.ReturnType.SpecialType == SpecialType.System_Void &&
-               method.Parameters.Length == 1;
-    }
+    private static bool IsValidator(IMethodSymbol method, ITypeSymbol? wrappedType) =>
+        wrappedType is not null &&
+        method.DeclaredAccessibility == Accessibility.Private &&
+        method.IsStatic &&
+        method.Parameters.Length == 1 &&
+        SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, wrappedType) &&
+        method.ReturnType.SpecialType == SpecialType.System_Void;
 }

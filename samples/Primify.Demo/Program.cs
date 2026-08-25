@@ -40,7 +40,7 @@ public static class Program
         collection.Insert(product);
 
         // Find by ID (most efficient lookup)
-        var foundById = collection.FindById(product.Id);
+        var foundById = collection.FindById(product.Id.Value);
         Console.WriteLine($"Found: {foundById.Name} (ID: {foundById.Id})");
 
         // Query by wrapped type property (works with indexes)
@@ -54,7 +54,7 @@ public static class Program
         var count = collection.Count(d => d.Number != ItemNumber.Undefined);
 
         // Example of finding by ID string
-        var productById = collection.FindById(ItemId.From(Guid.Parse(itemId.Value.ToString())));
+        var productById = collection.FindById(itemId.Value);
         Console.WriteLine($"Found: {count} (ID: {productById.Id})");
     }
 }

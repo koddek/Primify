@@ -1,7 +1,7 @@
 # Primify
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/koddek/Primify/build-publish-nuget.yml?branch=main&style=for-the-badge)](https://github.com/koddek/Primify/actions/workflows/build-publish-nuget.yml)
-[![NuGet Version](https://img.shields.io/badge/NuGet-1.7.1-blue?style=for-the-badge&logo=nuget)](https://github.com/koddek/Primify/pkgs/nuget/Primify)
+[![NuGet Version](https://img.shields.io/badge/NuGet-1.11.0-blue?style=for-the-badge&logo=nuget)](https://github.com/koddek/Primify/pkgs/nuget/Primify)
 [![License](https://img.shields.io/github/license/koddek/Primify?style=for-the-badge)](LICENSE)
 
 **Primify** is a high-performance C# source generator that creates strongly-typed, boilerplate-free wrappers for
@@ -26,15 +26,21 @@ values instantly.
   never be created.
 * ✅ **Zero Boilerplate:** Define your type's rules in one place. Primify generates all the necessary boilerplate for
   equality, casting, and serialization.
-* ✅ **Zero Dependencies:** As a source generator, Primify adds no runtime dependencies to your project. The generated
-  code is yours and self-contained.
+* ✅ **Compile-Time Generation:** Equality, conversions, and serializer wiring are generated directly into your
+  assembly — no runtime reflection or IL weaving.
 
 ## Features
 
-- **Type-Safe Primitive Wrappers:** Generate `readonly record struct` or `record class` wrappers.
-- **Out-of-the-Box Serialization:** Seamless JSON and BSON integration.
-- **Built-in Validation & Normalization:** Define custom rules for your types.
+- **Type-Safe Primitive Wrappers:** Generate `readonly record struct`, `record struct`, `record class`, or plain
+  `class`/`struct` wrappers.
+- **Built-in Validation & Normalization:** Declare optional private static hooks; invalid values can never enter
+  through `From`, `TryFrom`, casts, or deserialization.
+- **Non-Throwing Creation:** Every wrapper gets a generated `TryFrom(value, out result)`.
+- **Out-of-the-Box Serialization:** System.Text.Json, Newtonsoft.Json (JSON + BSON), and LiteDB with built-in bridges
+  for the full modern primitive set (`DateOnly`, `TimeOnly`, `TimeSpan`, `DateTimeOffset`, `Half`, ...).
 - **Predefined Static Values:** Easily create common instances like `Username.Guest` or `Id.Empty`.
+- **IDE Friendly:** Generated types carry `[DebuggerDisplay("{Value}")]` and compile-time diagnostics for hook
+  signature mistakes.
 - **High Performance:** Designed for minimal overhead, with benchmarks to prove it.
 
 ## Installation
@@ -44,6 +50,17 @@ Primify is distributed as a NuGet package.
 ```bash
 dotnet add package Primify
 ```
+
+The `Primify` package ships adapters for System.Text.Json, Newtonsoft.Json, and LiteDB, so referencing it brings
+`Newtonsoft.Json`, `Newtonsoft.Json.Bson`, and `LiteDB` along as package dependencies. Wrapped types work with all
+three serializers out of the box.
+
+### Agent skill
+
+The package carries an agent-facing skill at `skills/primify/SKILL.md` (visible in the extracted package folder,
+e.g. `~/.nuget/packages/primify/<version>/skills/primify/SKILL.md`). It teaches coding agents the declaration syntax,
+hook contract, generated API surface, serializer behavior, and best practices. The canonical copy lives in this repo
+under [`skills/primify/SKILL.md`](skills/primify/SKILL.md).
 
 ## Getting Started
 
@@ -104,13 +121,19 @@ public readonly partial record struct ProductNumber
 
 ### 2. Using Your Wrapper Types
 
-Primify generates all the necessary boilerplate, including constructors, `From` methods, equality comparison, and
-string representation.
+Primify generates all the necessary boilerplate: `Value` property, private constructor, `From`/`TryFrom` factories,
+conversion operators, equality members, `[DebuggerDisplay]`, serializer attributes, and LiteDB registration.
 
 ```csharp
 // Creating instances using the From method
 var product1 = ProductName.From("  Premium Widget  "); // Normalized to "Premium Widget"
 var productNum1 = ProductNumber.From(42);
+
+// Non-throwing creation at system boundaries (user input, config, external payloads)
+if (!ProductNumber.TryFrom(userInput, out var parsed))
+{
+    Console.WriteLine("Invalid product number");
+}
 
 // Using predefined values
 var defaultProduct = ProductName.Default;
@@ -136,9 +159,13 @@ string productType = product1 switch
     _ => "Standard product"
 };
 
-// Implicit conversion back to the primitive type (when needed)
-string nameString = (string)product1;
-int number = (int)productNum1;
+// Converting back to the primitive type is implicit
+string nameString = product1;
+int number = productNum1;
+
+// Converting a primitive into a wrapper is explicit by design:
+// it runs normalization and validation, so it can throw on invalid input.
+var product3 = (ProductName)"Premium Widget";
 
 // Using with collections
 var products = new List<ProductName>
@@ -210,11 +237,11 @@ var product = new ProductDocument
 // Insert the document
 collection.Insert(product);
 
-// Find by ID (most efficient lookup)
-var foundById = collection.FindById(product.Id);
+// Find by ID (pass the underlying primitive; wrapped types do not implicitly convert to BsonValue)
+var foundById = collection.FindById(product.Id.Value);
 Console.WriteLine($"Found: {foundById.Name} (ID: {foundById.Id})");
 
-// Query by wrapped type property (works with indexes)
+// Query by wrapped type property (works with indexes; values serialize through the registered mapping)
 var queryResult = collection.FindOne(d => d.Number == product.Number);
 
 // Update a document
@@ -224,8 +251,8 @@ collection.Update(product);
 // Count documents with a specific number
 var count = collection.Count(d => d.Number != ProductNumber.Undefined);
 
-// Example of finding by ID string
-var productById = collection.FindById(ProductId.From(Guid.Parse(productId.Value.ToString())));
+// Example of finding by ID
+var productById = collection.FindById(productId.Value);
 Console.WriteLine($"Found by ID: {productById.Name} (Count: {count})");
 ```
 
@@ -249,9 +276,23 @@ catch (ArgumentOutOfRangeException ex)
     // "Value must be between 1 and 100. (Parameter 'value')"
 }
 
+// Non-throwing alternative
+if (ProductNumber.TryFrom(101, out var result))
+{
+    Console.WriteLine(result.Value);
+}
+else
+{
+    Console.WriteLine("Invalid product number");
+}
+
 // Predefined values bypass validation
 var undefined = ProductNumber.Undefined; // No exception thrown
 ```
+
+`TryFrom` returns `false` when `Validate` throws an `ArgumentException`-derived exception
+(`ArgumentNullException`, `ArgumentOutOfRangeException`, ...) and outputs the default instance otherwise.
+Prefer throwing exceptions from `Validate` so both `From` and `TryFrom` behave consistently.
 
 ### 5. Working with Nullable Values
 
@@ -274,27 +315,91 @@ public class ProductEntity
 
 ## Supported Primitive Types
 
-Primify works with most common value types, including:
+Primify wraps any single-value type, and ships built-in LiteDB mappings for the full set of common primitives:
 
-- All .NET primitives (`int`, `string`, `bool`, `double`, etc.)
-- `Guid`
-- `DateTime`, `DateTimeOffset`, `DateOnly`, `TimeOnly`, `TimeSpan`
+| Wrapped type | LiteDB storage | Notes |
+|---|---|---|
+| `string`, `bool`, `int`, `long`, `double`, `decimal`, `Guid` | native BSON type | lossless |
+| `byte`, `sbyte`, `short`, `ushort`, `char` | Int32 | checked cast on read |
+| `uint`, `ulong` | Int64 | follows LiteDB conventions; values beyond `long` range throw `OverflowException` |
+| `float`, `Half` | Double | widened; `Half` is exact for representable values |
+| `DateTime` | DateTime | normalized to UTC instants (LiteDB stores millisecond precision) |
+| `TimeSpan`, `TimeOnly` | Int64 ticks | lossless |
+| `DateOnly` | DateTime | stored as UTC midnight so the date survives any machine timezone |
+| `DateTimeOffset` | Document `{DateTime, Offset}` | offset preserved exactly; UTC component has millisecond precision |
+
+Other types are not blocked — register your own mapping with
+`LiteDbMapping.Register<TWrapper, TValue>(mapper)` replacement logic or a custom
+`BsonMapper.RegisterType<T>` call after startup.
 
 ## Advanced Usage
 
 ### LiteDB Custom Mapping
 
-By default, Primify generates a `[ModuleInitializer]` to automatically register a BSON mapper for your type. If you
-need to disable this or provide a custom mapping, you can do so. In this case, you would modify the generator's
-behavior (if an option is provided) or simply register your own mapper, which will override the default.
+By default, Primify generates a `[ModuleInitializer]` that calls `LiteDbMapping.Register<TWrapper, TValue>()`,
+which registers a BSON mapping on `BsonMapper.Global`. Registering again replaces the mapping, so you can override
+any type at startup:
 
 ```csharp
-// This is not needed by default, but can be used for custom logic.
+// Replace the default mapping for a wrapper type.
 BsonMapper.Global.RegisterType<UserId>(
     serialize: id => id.Value,
     deserialize: bson => UserId.From(bson.AsInt32)
 );
 ```
+
+Wrapped types do not expose implicit conversions to/from `LiteDB.BsonValue`; pass `.Value` when an API expects the
+underlying primitive or a BSON value:
+
+```csharp
+var found = collection.FindById(product.Id.Value);
+```
+
+## How It Works
+
+Primify is two assemblies acting as one:
+
+1. **`Primify.Generators`** — an incremental Roslyn generator. At compile time it finds every `partial` type
+   annotated with `[Primify<T>]`, validates the optional `Normalize`/`Validate` hook signatures, and emits a
+   generated partial containing: the `Value` property, private constructor, `From`/`TryFrom`, conversion operators,
+   equality members where the kind needs them, `[DebuggerDisplay]`, JSON converter attributes, and a file-scoped
+   `[ModuleInitializer]`.
+2. **`Primify` runtime** — the small support library your code references: `IPrimify<TSelf,TValue>` contract, the
+   System.Text.Json and Newtonsoft converters, and `LiteDbMapping`, which owns every LiteDB type bridge in one
+   place. The generated initializer calls `LiteDbMapping.Register<TWrapper,TValue>()` at startup; re-register any
+   type afterwards to override.
+
+Nothing runs via reflection at serialization time: converters read `.Value` directly and rebuild through the
+static abstract `From`, so validation applies on deserialization exactly as at construction sites.
+
+## Best Practices
+
+**Keep `Normalize` a cleanup step and `Validate` an invariant check.** `Normalize` runs first; its output is what
+`Validate` sees. Trim/case/lowercase/clamp in `Normalize`; enforce business rules (ranges, lengths, formats) in
+`Validate`.
+
+**Throw `ArgumentException`-derived exceptions from `Validate`.** The generated `TryFrom` catches
+`ArgumentException` (and subclasses such as `ArgumentNullException`/`ArgumentOutOfRangeException`) to return `false`.
+Throwing anything else escapes `TryFrom` and breaks that contract.
+
+**Prefer wrappers with validation for domain concepts; keep bare wrappers for opaque IDs.** `[Primify<Guid>]` with no
+hooks is perfect for identifiers; add hooks only when rules exist.
+
+**Use `From` for trusted construction sites and `TryFrom` at system boundaries.** Parsing user input, reading config,
+or handling external payloads: use `TryFrom` and surface your own error. Internal code paths can assume `From`.
+
+**Remember implicit conversions only leave the wrapper.** `string s = wrapper;` works implicitly because it cannot
+fail. Entering a wrapper always requires `From`, `TryFrom`, or an explicit cast — invalid data fails loudly instead of
+silently flowing through an assignment.
+
+**Predefined values (`Undefined`, `Default`) bypass validation by design.** They call the private constructor
+directly, so they are safe places for sentinel states — but never construct invalid instances there casually.
+
+**Pass `.Value` when an API expects the primitive or a BSON value.** Wrapped types intentionally do not define
+implicit `BsonValue` conversions.
+
+**One concept per type.** Don't reuse `Email` where `UserName` is meant; that's the whole point of eliminating
+primitive obsession.
 
 ## Benchmarks
 ```csharp

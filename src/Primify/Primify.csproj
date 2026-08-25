@@ -3,7 +3,7 @@
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
         <PackageId>Primify</PackageId>
-        <Version>1.10.0</Version>
+        <Version>1.11.0</Version>
         <IsPackable>true</IsPackable>
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
@@ -13,6 +13,14 @@
         <PackageReference Include="Newtonsoft.Json" Version="13.0.4"/>
         <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3"/>
         <PackageReference Update="Microsoft.SourceLink.GitHub" Version="10.0.203" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- Agent-facing skill travels with the package; tools can read it from the extracted package folder. -->
+        <None Include="..\..\skills\primify\SKILL.md"
+              Pack="true"
+              PackagePath="skills/primify/"
+              Visible="false"/>
     </ItemGroup>
 
     <ItemGroup>

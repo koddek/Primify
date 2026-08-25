@@ -4,16 +4,36 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Bson;
 
 /// <summary>
-/// A reflection-free JSON + BSON converter for wrapper types using Newtonsoft.Json.
+/// A reflection-free JSON + BSON converter for Primify wrapper types using Newtonsoft.Json.
+/// The generator attaches it to every wrapper via
+/// <c>[JsonConverter(typeof(NewtonsoftJsonConverter&lt;TWrapper,TValue&gt;))]</c>.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Standard JSON payloads carry the bare primitive. When writing to a
+/// <see cref="BsonDataWriter"/>, the value is wrapped as <c>{ "Value": ... }</c> so BSON keeps a
+/// document shape.
+/// </para>
+/// <para>
+/// Deserialization rebuilds the wrapper through <see cref="IPrimify{TSelf, TValue}.From(TValue)"/> —
+/// invalid payloads throw the wrapper's validation exception instead of yielding an unvalidated
+/// instance.
+/// </para>
+/// </remarks>
+/// <typeparam name="TWrapper">The generated wrapper type.</typeparam>
+/// <typeparam name="TValue">The underlying primitive type.</typeparam>
 public sealed class NewtonsoftJsonConverter<TWrapper, TValue> : JsonConverter
     where TWrapper : IPrimify<TWrapper, TValue>
 {
+    /// <summary>Determines whether this converter handles the given type (exact wrapper match only).</summary>
+    /// <param name="objectType">The type to convert.</param>
+    /// <returns>true when <paramref name="objectType"/> is exactly <typeparamref name="TWrapper"/>.</returns>
     public override bool CanConvert(Type objectType)
     {
         return objectType == typeof(TWrapper);
     }
 
+    /// <summary>Writes the wrapped primitive; wraps in <c>{ "Value": ... }</c> for BSON writers.</summary>
     public override void WriteJson(JsonWriter writer, object? value, JsonSerializer serializer)
     {
         if (value is null)
@@ -24,7 +44,7 @@ public sealed class NewtonsoftJsonConverter<TWrapper, TValue> : JsonConverter
 
         // Cast to the wrapper type and access .Value directly. No reflection needed.
         var wrapper = (TWrapper)value;
-        var innerValue = (object)wrapper.Value;
+        var innerValue = (object)wrapper.Value!;
 
         if (innerValue is DateTimeOffset dto)
         {
@@ -44,6 +64,7 @@ public sealed class NewtonsoftJsonConverter<TWrapper, TValue> : JsonConverter
         }
     }
 
+    /// <summary>Reads the primitive (or BSON <c>{ "Value": ... }</c> shape) and returns a validated wrapper.</summary>
     public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue,
         JsonSerializer serializer)
     {
@@ -89,6 +110,6 @@ public sealed class NewtonsoftJsonConverter<TWrapper, TValue> : JsonConverter
         }
 
         // No reflection! Call the static 'From' method directly.
-        return TWrapper.From((TValue)rawValue);
+        return TWrapper.From((TValue)rawValue!);
     }
 }
