@@ -1,7 +1,7 @@
 # Primify
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/koddek/Primify/build-publish-nuget.yml?branch=main&style=for-the-badge)](https://github.com/koddek/Primify/actions/workflows/build-publish-nuget.yml)
-[![NuGet Version](https://img.shields.io/badge/NuGet-1.7.1-blue?style=for-the-badge&logo=nuget)](https://github.com/koddek/Primify/pkgs/nuget/Primify)
+[![NuGet Version](https://img.shields.io/badge/NuGet-1.10.0-blue?style=for-the-badge&logo=nuget)](https://github.com/koddek/Primify/pkgs/nuget/Primify)
 [![License](https://img.shields.io/github/license/koddek/Primify?style=for-the-badge)](LICENSE)
 
 **Primify** is a high-performance C# source generator that creates strongly-typed, boilerplate-free wrappers for
@@ -26,8 +26,8 @@ values instantly.
   never be created.
 * ✅ **Zero Boilerplate:** Define your type's rules in one place. Primify generates all the necessary boilerplate for
   equality, casting, and serialization.
-* ✅ **Zero Dependencies:** As a source generator, Primify adds no runtime dependencies to your project. The generated
-  code is yours and self-contained.
+* ✅ **Compile-Time Generation:** Equality, conversions, and serializer wiring are generated directly into your
+  assembly — no runtime reflection or IL weaving.
 
 ## Features
 
@@ -44,6 +44,10 @@ Primify is distributed as a NuGet package.
 ```bash
 dotnet add package Primify
 ```
+
+The `Primify` package ships adapters for System.Text.Json, Newtonsoft.Json, and LiteDB, so referencing it brings
+`Newtonsoft.Json`, `Newtonsoft.Json.Bson`, and `LiteDB` along as package dependencies. Wrapped types work with all
+three serializers out of the box.
 
 ## Getting Started
 
@@ -136,9 +140,13 @@ string productType = product1 switch
     _ => "Standard product"
 };
 
-// Implicit conversion back to the primitive type (when needed)
-string nameString = (string)product1;
-int number = (int)productNum1;
+// Converting back to the primitive type is implicit
+string nameString = product1;
+int number = productNum1;
+
+// Converting a primitive into a wrapper is explicit by design:
+// it runs normalization and validation, so it can throw on invalid input.
+var product3 = (ProductName)"Premium Widget";
 
 // Using with collections
 var products = new List<ProductName>
