@@ -1,7 +1,7 @@
 # Primify
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/koddek/Primify/build-publish-nuget.yml?branch=main&style=for-the-badge)](https://github.com/koddek/Primify/actions/workflows/build-publish-nuget.yml)
-[![NuGet Version](https://img.shields.io/badge/NuGet-1.11.1-blue?style=for-the-badge&logo=nuget)](https://github.com/koddek/Primify/pkgs/nuget/Primify)
+[![NuGet Version](https://img.shields.io/badge/NuGet-1.11.2-blue?style=for-the-badge&logo=nuget)](https://github.com/koddek/Primify/pkgs/nuget/Primify)
 [![License](https://img.shields.io/github/license/koddek/Primify?style=for-the-badge)](LICENSE)
 
 **Primify** is a high-performance C# source generator that creates strongly-typed, boilerplate-free wrappers for
@@ -45,7 +45,7 @@ values instantly.
 
 ## Installation
 
-Primify is distributed as a NuGet package.
+Primify is distributed as a NuGet package. The current package targets .NET 10.
 
 ```bash
 dotnet add package Primify
@@ -62,12 +62,14 @@ e.g. `~/.nuget/packages/primify/<version>/skills/primify/SKILL.md`). It teaches 
 hook contract, generated API surface, serializer behavior, and best practices. The canonical copy lives in this repo
 under [`skills/primify/SKILL.md`](skills/primify/SKILL.md).
 
+The generated and runtime API is summarized in [`docs/API.md`](docs/API.md).
+
 ## Getting Started
 
 ### 1. Define Your Wrapper
 
 Create a `partial record` and decorate it with the `[Primify<T>]` attribute, where `T` is the underlying primitive type.
-You can define both `record class` and `record struct` types.
+You can define `class`, `struct`, `record class`, and `record struct` wrappers. The declaration must be partial and accessible from generated namespace-level code. Generic wrappers, static, abstract, file-local, and ref-like declarations are rejected with PRIT005.
 
 ```csharp
 using Primify.Attributes;
@@ -84,9 +86,8 @@ public sealed partial record class ProductName
     public static ProductName Undefined { get; } = new("undefined");
     public static ProductName Default { get; } = new("default-product");
 
-    // Normalize is called before validation (Optional)
-    private static string Normalize(string value) 
-        => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
+    // Normalize receives non-null values. It runs before validation (Optional)
+    private static string Normalize(string value) => value.Trim();
 
     // Validation runs after normalization (Optional)
     private static void Validate(string value)
@@ -209,6 +210,9 @@ string newtonJson = JsonConvert.SerializeObject(data);
 var deserializedNewton = JsonConvert.DeserializeObject<YourType>(newtonJson);
 ```
 
+`DateTimeOffset` uses `{ "UtcTicks": ..., "OffsetTicks": ... }` in standard Newtonsoft JSON. BSON uses a `Value` field,
+with the same tick object for `DateTimeOffset`, so the original offset is retained.
+
 #### LiteDB
 
 ```csharp
@@ -291,8 +295,9 @@ var undefined = ProductNumber.Undefined; // No exception thrown
 ```
 
 `TryFrom` returns `false` when `Validate` throws an `ArgumentException`-derived exception
-(`ArgumentNullException`, `ArgumentOutOfRangeException`, ...) and outputs the default instance otherwise.
-Prefer throwing exceptions from `Validate` so both `From` and `TryFrom` behave consistently.
+(`ArgumentNullException`, `ArgumentOutOfRangeException`, ...). Value-type wrappers return their default value on failure;
+class wrappers return `null` and advertise that with `MaybeNullWhen(false)`. Prefer throwing exceptions from `Validate`
+so both `From` and `TryFrom` behave consistently.
 
 ### 5. Working with Nullable Values
 
@@ -313,9 +318,13 @@ public class ProductEntity
 }
 ```
 
+`From` rejects null reference values before calling `Normalize`. A normalizer must not return null; Primify throws
+`ArgumentNullException` if it does. This keeps nullable wrapper properties separate from invalid non-null instances.
+
 ## Supported Primitive Types
 
-Primify wraps any single-value type, and ships built-in LiteDB mappings for the full set of common primitives:
+Primify wraps single-value types and ships built-in LiteDB mappings for the common primitives below. Values without a
+built-in LiteDB bridge are still valid wrapper types, but their persistence mapping must be registered explicitly.
 
 | Wrapped type | LiteDB storage | Notes |
 |---|---|---|
@@ -328,17 +337,21 @@ Primify wraps any single-value type, and ships built-in LiteDB mappings for the 
 | `DateOnly` | DateTime | stored as UTC midnight so the date survives any machine timezone |
 | `DateTimeOffset` | Document `{DateTime, Offset}` | offset preserved exactly; UTC component has millisecond precision |
 
+For Newtonsoft.Json, `DateTimeOffset` uses `{ "UtcTicks": ..., "OffsetTicks": ... }` in standard JSON and inside the BSON
+`Value` field. This avoids local-time conversion and preserves the original offset. Other supported values use their
+normal JSON representation.
+
 Other types are not blocked — register your own mapping with
 `LiteDbMapping.Register<TWrapper, TValue>(mapper)` replacement logic or a custom
-`BsonMapper.RegisterType<T>` call after startup.
+`BsonMapper.RegisterType<TWrapper>` call after startup.
 
 ## Advanced Usage
 
 ### LiteDB Custom Mapping
 
-By default, Primify generates a `[ModuleInitializer]` that calls `LiteDbMapping.Register<TWrapper, TValue>()`,
-which registers a BSON mapping on `BsonMapper.Global`. Registering again replaces the mapping, so you can override
-any type at startup:
+By default, Primify generates a `[ModuleInitializer]` that calls `LiteDbMapping.TryRegister<TWrapper, TValue>()`.
+Built-in values are registered on `BsonMapper.Global`; unsupported values are skipped so assembly startup does not
+crash. Registering a mapping again replaces the previous mapping, so you can override any type at startup:
 
 ```csharp
 // Replace the default mapping for a wrapper type.
@@ -366,7 +379,7 @@ Primify is two assemblies acting as one:
    `[ModuleInitializer]`.
 2. **`Primify` runtime** — the small support library your code references: `IPrimify<TSelf,TValue>` contract, the
    System.Text.Json and Newtonsoft converters, and `LiteDbMapping`, which owns every LiteDB type bridge in one
-   place. The generated initializer calls `LiteDbMapping.Register<TWrapper,TValue>()` at startup; re-register any
+   place. The generated initializer calls `LiteDbMapping.TryRegister<TWrapper,TValue>()` at startup; re-register any
    type afterwards to override.
 
 Nothing runs via reflection at serialization time: converters read `.Value` directly and rebuild through the
@@ -404,9 +417,9 @@ primitive obsession.
 ## Benchmarks
 ```csharp
 // * Summary *
-BenchmarkDotNet v0.15.6, macOS 26.1 (25B78) [Darwin 25.1.0]
+BenchmarkDotNet v0.15.8, macOS 26.1 (25B78) [Darwin 25.1.0]
 Apple M1, 1 CPU, 8 logical and 8 physical cores
-.NET SDK 10.0.100
+.NET SDK 10.0.401
 [Host]    : .NET 10.0.0 (10.0.0, 10.0.25.52411), Arm64 RyuJIT armv8.0-a
 .NET 10.0 : .NET 10.0.0 (10.0.0, 10.0.25.52411), Arm64 RyuJIT armv8.0-a
 Job=.NET 10.0  Runtime=.NET 10.0
