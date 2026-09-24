@@ -1,78 +1,30 @@
-using JsonSerializer = System.Text.Json.JsonSerializer;
-
 namespace Primify.Generator.Tests.StructTests.Basic;
+
+using Primify.Generator.Tests.Common;
 
 public class IntStructBasicTests
 {
     [Test]
-    public async Task From_CreatesType_WhenCalled()
-    {
-        int expectedValue = 1001;
-        var result = IntStruct.From(expectedValue);
-
-        await Assert.That(result.Value).IsEqualTo(expectedValue);
-    }
+    public async Task From_CreatesType_WhenCalled() => await WrapperContract.From_CreatesValidInstance<IntStruct>();
 
     [Test]
-    public async Task ImplicitConversion_Succeeds_WhenDereferencing()
-    {
-        int expectedValue = 1001;
-        var input = IntStruct.From(expectedValue);
-        int result = input;
-
-        await Assert.That(result).IsEqualTo(expectedValue);
-    }
+    public async Task Value_AccessesCorrectValue() => await WrapperContract.Value_ReturnsWrappedValue<IntStruct>();
 
     [Test]
-    public async Task Value_AccessesCorrectValue()
-    {
-        var value = 123;
-        var wrapper = IntStruct.From(value);
-
-        await Assert.That(wrapper.Value).IsEqualTo(value);
-    }
+    public async Task ImplicitConversion_Succeeds_WhenDereferencing() => await WrapperContract.ImplicitConversion_ReturnsPrimitive<IntStruct>(
+        value => (int)value);
 
     [Test]
-    public async Task Serialization_Works_WithSystemTextJson()
-    {
-        var expectedValue = 42;
-        var result = IntStruct.From(expectedValue);
-
-        var json = JsonSerializer.Serialize(result);
-
-        var deserialized = JsonSerializer.Deserialize<IntStruct>(json);
-        await Assert.That(deserialized.Value).IsEqualTo(expectedValue);
-    }
+    public async Task ExplicitCast_CreatesType_WhenCalled() => await WrapperContract.ExplicitConversion_RoundTrips<IntStruct>(
+        value => (IntStruct)value,
+        value => (int)value);
 
     [Test]
-    public async Task ExplicitCast_CreatesType_WhenCalled()
-    {
-        int expectedValue = 1001;
-
-        IntStruct result1 = (IntStruct)expectedValue;
-        int result2 = (int)result1;
-
-        await Assert.That(result1.Value).IsEqualTo(expectedValue);
-        await Assert.That(result2).IsEqualTo(expectedValue);
-    }
+    public async Task Serialization_Works_WithSystemTextJson() => await WrapperContract.SystemTextJson_RoundTrips<IntStruct>();
 
     [Test]
-    public async Task Serialization_Works_WithNewtonsoftJson()
-    {
-        var expectedValue = 42;
-        var result = IntStruct.From(expectedValue);
-
-        var json = Newtonsoft.Json.JsonConvert.SerializeObject(result);
-
-        var deserialized = Newtonsoft.Json.JsonConvert.DeserializeObject<IntStruct>(json);
-        await Assert.That(deserialized.Value).IsEqualTo(expectedValue);
-    }
+    public async Task Serialization_Works_WithNewtonsoftJson() => await WrapperContract.NewtonsoftJson_RoundTrips<IntStruct>();
 
     [Test]
-    public async Task ToString_ReflectsUnderlyingValue()
-    {
-        var wrapper = IntStruct.From(1001);
-
-        await Assert.That(wrapper.ToString()).IsEqualTo(wrapper.Value.ToString());
-    }
+    public async Task ToString_ReflectsUnderlyingValue() => await WrapperContract.ToString_ReturnsExpectedText<IntStruct>("1001");
 }

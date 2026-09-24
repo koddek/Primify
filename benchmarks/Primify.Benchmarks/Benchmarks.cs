@@ -18,6 +18,9 @@ public class UsernameBenchmarks
     private SmartUser _smart1;
     private SmartUser _smart2;
 
+    private string _string1 = string.Empty;
+    private string _string2 = string.Empty;
+
     [GlobalSetup]
     public void Setup()
     {
@@ -26,6 +29,9 @@ public class UsernameBenchmarks
 
         _smart1 = SmartUser.From(DirtyValue);
         _smart2 = SmartUser.From(DirtyValue);
+
+        _string1 = CleanValue;
+        _string2 = CleanValue;
     }
 
     // ----------------------------------------------------
@@ -69,7 +75,7 @@ public class UsernameBenchmarks
     [Benchmark(Description = "String == String")]
     public bool Equals_String()
     {
-        return CleanValue == CleanValue;
+        return _string1 == _string2;
     }
 
     [Benchmark(Description = "Simple == Simple")]

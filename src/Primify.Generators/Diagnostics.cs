@@ -1,6 +1,6 @@
 namespace Primify.Generators;
 
-public static class Diagnostics
+internal static class Diagnostics
 {
     public static readonly DiagnosticDescriptor InvalidType = new(
         id: "PRIT001",
@@ -30,6 +30,22 @@ public static class Diagnostics
         id: "PRIT004",
         title: "Containing Type Must Be Partial",
         messageFormat: "Nested Primify type '{0}' requires every containing type to be declared partial",
+        category: "TypeValidation",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnsupportedTypeDeclaration = new(
+        id: "PRIT005",
+        title: "Unsupported Primify Type Declaration",
+        messageFormat: "Primify cannot generate '{0}': {1}",
+        category: "TypeValidation",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ReservedMemberConflict = new(
+        id: "PRIT006",
+        title: "Reserved Primify Member",
+        messageFormat: "Primify wrapper '{0}' already declares reserved member '{1}'",
         category: "TypeValidation",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);

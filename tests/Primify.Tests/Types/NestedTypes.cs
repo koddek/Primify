@@ -33,7 +33,7 @@ public partial struct NestedStructContainer
 // Nested record class containing a Primify type
 public partial record class NestedRecordClassContainer
 {
-    public InnerRecordClassId Id { get; set; }
+    public InnerRecordClassId Id { get; set; } = null!;
 
     [Primify<string>]
     public sealed partial record class InnerRecordClassId;

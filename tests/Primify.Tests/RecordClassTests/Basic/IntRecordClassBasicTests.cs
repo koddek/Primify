@@ -1,76 +1,30 @@
 namespace Primify.Generator.Tests.RecordClassTests.Basic;
 
+using Primify.Generator.Tests.Common;
+
 public class IntRecordClassBasicTests
 {
     [Test]
-    public async Task From_CreatesType_WhenCalled()
-    {
-        int expectedValue = 1001;
-        var result = IntRecordClass.From(expectedValue);
-
-        await Assert.That(result.Value).IsEqualTo(expectedValue);
-    }
+    public async Task From_CreatesType_WhenCalled() => await WrapperContract.From_CreatesValidInstance<IntRecordClass>();
 
     [Test]
-    public async Task ImplicitConversion_Succeeds_WhenDereferencing()
-    {
-        int expectedValue = 1001;
-        var input = IntRecordClass.From(expectedValue);
-        int result = input;
-
-        await Assert.That(result).IsEqualTo(expectedValue);
-    }
+    public async Task Value_AccessesCorrectValue() => await WrapperContract.Value_ReturnsWrappedValue<IntRecordClass>();
 
     [Test]
-    public async Task ExplicitCast_CreatesType_WhenCalled()
-    {
-        int expectedValue = 1001;
-
-        IntRecordClass result1 = (IntRecordClass)expectedValue;
-        int result2 = (int)result1;
-
-        await Assert.That(result1.Value).IsEqualTo(expectedValue);
-        await Assert.That(result2).IsEqualTo(expectedValue);
-    }
+    public async Task ImplicitConversion_Succeeds_WhenDereferencing() => await WrapperContract.ImplicitConversion_ReturnsPrimitive<IntRecordClass>(
+        value => (int)value);
 
     [Test]
-    public async Task Serialization_Works_WithSystemTextJson()
-    {
-        var expectedValue = 42;
-        var result = IntRecordClass.From(expectedValue);
-
-        var json = System.Text.Json.JsonSerializer.Serialize(result);
-
-        var deserialized = System.Text.Json.JsonSerializer.Deserialize<IntRecordClass>(json);
-        await Assert.That(deserialized!.Value).IsEqualTo(expectedValue);
-    }
+    public async Task ExplicitCast_CreatesType_WhenCalled() => await WrapperContract.ExplicitConversion_RoundTrips<IntRecordClass>(
+        value => (IntRecordClass)value,
+        value => (int)value);
 
     [Test]
-    public async Task Serialization_Works_WithNewtonsoftJson()
-    {
-        var expectedValue = 42;
-        var result = IntRecordClass.From(expectedValue);
-
-        var json = Newtonsoft.Json.JsonConvert.SerializeObject(result);
-
-        var deserialized = Newtonsoft.Json.JsonConvert.DeserializeObject<IntRecordClass>(json);
-        await Assert.That(deserialized!.Value).IsEqualTo(expectedValue);
-    }
+    public async Task Serialization_Works_WithSystemTextJson() => await WrapperContract.SystemTextJson_RoundTrips<IntRecordClass>();
 
     [Test]
-    public async Task Value_AccessesCorrectValue()
-    {
-        var value = 123;
-        var wrapper = IntRecordClass.From(value);
-
-        await Assert.That(wrapper.Value).IsEqualTo(value);
-    }
+    public async Task Serialization_Works_WithNewtonsoftJson() => await WrapperContract.NewtonsoftJson_RoundTrips<IntRecordClass>();
 
     [Test]
-    public async Task ToString_ReflectsUnderlyingValue()
-    {
-        var wrapper = IntRecordClass.From(1001);
-
-        await Assert.That(wrapper.ToString()).IsEqualTo("IntRecordClass { Value = 1001 }");
-    }
+    public async Task ToString_ReflectsUnderlyingValue() => await WrapperContract.ToString_ReturnsExpectedText<IntRecordClass>("IntRecordClass { Value = 1001 }");
 }

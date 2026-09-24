@@ -8,7 +8,7 @@ using Primify.Converters;
 
 public class GeneratorSnapshotTests
 {
-    private static (ImmutableArray<Diagnostic> Diagnostics, string? Generated) Generate(string code)
+    internal static (ImmutableArray<Diagnostic> Diagnostics, string? Generated) Generate(string code)
     {
         var references = new List<MetadataReference>();
         var platformAssemblies = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES");
@@ -29,13 +29,17 @@ public class GeneratorSnapshotTests
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var driver = CSharpGeneratorDriver.Create(new Primify.Generators.PrimifyGenerator().AsSourceGenerator());
-        var runResult = driver.RunGenerators(compilation).GetRunResult();
+        var runResult = driver.RunGeneratorsAndUpdateCompilation(
+                compilation,
+                out var generatedCompilation,
+                out var generatorDiagnostics)
+            .GetRunResult();
 
         var generated = runResult.Results.IsEmpty || runResult.Results[0].GeneratedSources.Length == 0
             ? null
             : runResult.Results[0].GeneratedSources[0].SourceText.ToString();
 
-        return (compilation.GetDiagnostics().AddRange(runResult.Diagnostics), generated);
+        return (generatedCompilation.GetDiagnostics().AddRange(generatorDiagnostics), generated);
     }
 
     private static async Task AssertNoErrors(ImmutableArray<Diagnostic> diagnostics)
@@ -65,7 +69,7 @@ public class GeneratorSnapshotTests
         await Assert.That(source).Contains("[System.Diagnostics.DebuggerDisplay(\"{Value}\")]");
         await Assert.That(source).Contains("explicit operator Foo(int value)");
         await Assert.That(source).Contains("implicit operator int(Foo value)");
-        await Assert.That(source).Contains("LiteDbMapping.Register<global::Snap.Foo, int>()");
+        await Assert.That(source).Contains("LiteDbMapping.TryRegister<global::Snap.Foo, int>()");
         await Assert.That(source).Contains("public static bool TryFrom(int value, out Foo result)");
         await Assert.That(source).Contains("/// Non-throwing alternative to <see cref=\"From\"/>.");
         await Assert.That(source).DoesNotContain("ToString()");

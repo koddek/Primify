@@ -21,8 +21,9 @@ public static class LiteDbMapping
     /// <remarks>
     /// <para>
     /// Registering the same wrapper type again replaces the previous mapping. The generated
-    /// <c>[ModuleInitializer]</c> calls this method on <see cref="BsonMapper.Global"/> at startup;
-    /// call it again with a custom <paramref name="mapper"/> or re-register afterwards to override.
+    /// <c>[ModuleInitializer]</c> calls <see cref="TryRegister{TWrapper, TValue}"/> on
+    /// <see cref="BsonMapper.Global"/> at startup; call this method with a custom
+    /// <paramref name="mapper"/> or re-register afterwards to override.
     /// </para>
     /// <para>
     /// Supported values of <typeparamref name="TValue"/>: <c>string</c>, <c>bool</c>,
@@ -52,14 +53,35 @@ public static class LiteDbMapping
     {
         var target = mapper ?? BsonMapper.Global;
 
-        var (write, read) = Resolve<TValue>();
+        var (write, read) = Resolve<TWrapper, TValue>();
 
         target.RegisterType<TWrapper>(
             serialize: wrapper => write(wrapper.Value!),
             deserialize: bson => TWrapper.From((TValue)read(bson)));
     }
 
-    private static (Func<object, BsonValue> Write, Func<BsonValue, object> Read) Resolve<TValue>()
+    /// <summary>
+    /// Attempts to register the built-in LiteDB mapping for <typeparamref name="TWrapper"/>.
+    /// </summary>
+    /// <typeparam name="TWrapper">The generated wrapper type.</typeparam>
+    /// <typeparam name="TValue">The underlying value type.</typeparam>
+    /// <param name="mapper">The mapper to update. Defaults to <see cref="BsonMapper.Global"/>.</param>
+    /// <returns><see langword="true"/> when a built-in mapping was registered; otherwise <see langword="false"/>.</returns>
+    public static bool TryRegister<TWrapper, TValue>(BsonMapper? mapper = null)
+        where TWrapper : IPrimify<TWrapper, TValue>
+    {
+        try
+        {
+            Register<TWrapper, TValue>(mapper);
+            return true;
+        }
+        catch (UnsupportedLiteDbTypeException)
+        {
+            return false;
+        }
+    }
+
+    private static (Func<object, BsonValue> Write, Func<BsonValue, object> Read) Resolve<TWrapper, TValue>()
     {
         var type = typeof(TValue);
 
@@ -229,8 +251,15 @@ public static class LiteDbMapping
                 });
         }
 
-        throw new NotSupportedException(
-            $"Primify does not provide a built-in LiteDB mapping for '{typeof(TValue)}'. " +
-            $"Register one manually: mapper.RegisterType<{typeof(TValue)}>(...), or wrap a supported primitive.");
+        throw new UnsupportedLiteDbTypeException(typeof(TValue), typeof(TWrapper));
+    }
+
+    private sealed class UnsupportedLiteDbTypeException : NotSupportedException
+    {
+        public UnsupportedLiteDbTypeException(Type valueType, Type wrapperType)
+            : base($"Primify does not provide a built-in LiteDB mapping for '{valueType}'. " +
+                   $"Register one manually: mapper.RegisterType<{wrapperType}>(...), or wrap a supported primitive.")
+        {
+        }
     }
 }

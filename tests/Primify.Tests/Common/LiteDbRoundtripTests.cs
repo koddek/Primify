@@ -2,6 +2,7 @@ namespace Primify.Generator.Tests.Common;
 
 using LiteDB;
 
+[NotInParallel]
 public class LiteDbRoundtripTests
 {
     private sealed class Holder<T>

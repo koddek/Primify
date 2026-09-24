@@ -12,7 +12,7 @@ namespace Primify.Attributes
     /// </para>
     /// <para>
     /// The declaring (user-written) part may optionally define the following private static hooks,
-    /// which the generator calls in this order whenever a value enters through
+    /// which the generator calls in this order for non-null values entering through
     /// <c>From</c>/<c>TryFrom</c>/explicit conversion/deserialization:
     /// </para>
     /// <list type="number">
@@ -21,7 +21,8 @@ namespace Primify.Attributes
     /// <see cref="ArgumentException"/>-derived exception to reject the value.</item>
     /// </list>
     /// <para>
-    /// Hooks with any other visibility or signature cause compile-time diagnostics PRIT002/PRIT003.
+    /// Hooks with any other visibility, generic arity, async shape, or by-reference parameter cause PRIT002/PRIT003.
+    /// Unsupported declaration shapes and reserved member conflicts are reported as PRIT005/PRIT006.
     /// </para>
     /// </remarks>
     /// <example>

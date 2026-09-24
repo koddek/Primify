@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.Text;
 /// Represents the data required to generate a Primify wrapper.
 /// This is a record to ensure value-based equality for Roslyn caching.
 /// </summary>
-public record PrimifyModel(
+internal record PrimifyModel(
     string Namespace,
     string ClassName,
     string Keyword, // class, struct, record class, record struct
@@ -18,10 +18,14 @@ public record PrimifyModel(
     bool HasValidate,
     bool InvalidNormalizeSignature,
     bool InvalidValidateSignature,
+    string? UnsupportedDeclarationReason,
+    string? ReservedMemberConflict,
     DiagnosticLocation Location,
     EquatableArray<ContainingTypeModel> ContainingTypes
 )
 {
+    public bool IsGlobalNamespace => string.IsNullOrWhiteSpace(Namespace) || Namespace == "<global namespace>";
+
     public string TypeName => ContainingTypes.IsEmpty
         ? ClassName
         : $"{ContainingTypes.Join(static type => type.Name)}.{ClassName}";
@@ -30,11 +34,11 @@ public record PrimifyModel(
         ? ClassName
         : $"{ContainingTypes.Join(static type => type.TypeReferenceName)}.{ClassName}";
 
-    public string FullyQualifiedTypeName => string.IsNullOrWhiteSpace(Namespace) || Namespace == "<global namespace>"
+    public string FullyQualifiedTypeName => IsGlobalNamespace
         ? TypeReferenceName
         : $"global::{Namespace}.{TypeReferenceName}";
 
-    public string HintName => string.IsNullOrWhiteSpace(Namespace) || Namespace == "<global namespace>"
+    public string HintName => IsGlobalNamespace
         ? $"{TypeName}.g.cs"
         : $"{Namespace}.{TypeName}.g.cs";
 
@@ -45,7 +49,7 @@ public record PrimifyModel(
 /// An equatable snapshot of a diagnostic position. Holding <see cref="Location"/>
 /// directly would defeat the value-based equality required for incremental caching.
 /// </summary>
-public readonly record struct DiagnosticLocation(
+internal readonly record struct DiagnosticLocation(
     string FilePath,
     TextSpan SourceSpan,
     LinePositionSpan LineSpan)
@@ -58,14 +62,15 @@ public readonly record struct DiagnosticLocation(
     public Location ToLocation() => Location.Create(FilePath, SourceSpan, LineSpan);
 }
 
-public record ContainingTypeModel(
+internal record ContainingTypeModel(
     string Declaration,
     string Name,
     string TypeReferenceName,
-    bool IsPartial
+    bool IsPartial,
+    bool IsGeneric
 );
 
-public readonly record struct EquatableArray<T>(T[] Items) : IEquatable<EquatableArray<T>>
+internal readonly record struct EquatableArray<T>(T[] Items) : IEquatable<EquatableArray<T>>
     where T : IEquatable<T>
 {
     public static EquatableArray<T> Empty { get; } = new([]);

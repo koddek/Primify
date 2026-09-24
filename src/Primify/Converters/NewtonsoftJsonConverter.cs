@@ -10,9 +10,11 @@ using Newtonsoft.Json.Bson;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Standard JSON payloads carry the bare primitive. When writing to a
-/// <see cref="BsonDataWriter"/>, the value is wrapped as <c>{ "Value": ... }</c> so BSON keeps a
-/// document shape.
+/// Standard JSON payloads carry the bare primitive. <see cref="DateTimeOffset"/>
+/// values use <c>{ "UtcTicks": ..., "OffsetTicks": ... }</c> so the original offset survives
+/// Json.NET's date tokenization. When writing to a <see cref="BsonDataWriter"/>, the value is
+/// wrapped as <c>{ "Value": ... }</c>; <see cref="DateTimeOffset"/> uses the same tick object
+/// inside that field.
 /// </para>
 /// <para>
 /// Deserialization rebuilds the wrapper through <see cref="IPrimify{TSelf, TValue}.From(TValue)"/> —
@@ -46,16 +48,23 @@ public sealed class NewtonsoftJsonConverter<TWrapper, TValue> : JsonConverter
         var wrapper = (TWrapper)value;
         var innerValue = (object)wrapper.Value!;
 
-        if (innerValue is DateTimeOffset dto)
+        if (innerValue is DateTimeOffset dateTimeOffset && writer is not BsonDataWriter)
         {
-            innerValue = dto.UtcDateTime;
+            WriteDateTimeOffsetObject(writer, dateTimeOffset);
         }
-
-        if (writer is BsonDataWriter)
+        else if (writer is BsonDataWriter)
         {
             writer.WriteStartObject();
             writer.WritePropertyName("Value");
-            serializer.Serialize(writer, innerValue);
+            if (innerValue is DateTimeOffset dto)
+            {
+                WriteDateTimeOffsetObject(writer, dto);
+            }
+            else
+            {
+                serializer.Serialize(writer, innerValue);
+            }
+
             writer.WriteEndObject();
         }
         else
@@ -64,7 +73,7 @@ public sealed class NewtonsoftJsonConverter<TWrapper, TValue> : JsonConverter
         }
     }
 
-    /// <summary>Reads the primitive (or BSON <c>{ "Value": ... }</c> shape) and returns a validated wrapper.</summary>
+    /// <summary>Reads a primitive, a DateTimeOffset tick object, or a BSON <c>{ "Value": ... }</c> shape and returns a validated wrapper.</summary>
     public override object? ReadJson(JsonReader reader, Type objectType, object? existingValue,
         JsonSerializer serializer)
     {
@@ -97,11 +106,37 @@ public sealed class NewtonsoftJsonConverter<TWrapper, TValue> : JsonConverter
 
         if (reader.TokenType == JsonToken.StartObject)
         {
-            // BSON path: { "Value": <...> }
-            reader.Read();
-            reader.Read(); // Advance to the value
-            rawValue = serializer.Deserialize<TValue>(reader);
-            reader.Read(); // Consume EndObject
+            if (typeof(TValue) == typeof(DateTimeOffset) && reader is JsonTextReader)
+            {
+                rawValue = ReadDateTimeOffsetObject(reader);
+            }
+            else if (reader is not BsonDataReader)
+            {
+                throw new JsonSerializationException("A Primify wrapper must be a primitive JSON value.");
+            }
+            else
+            {
+                if (!reader.Read() ||
+                    reader.TokenType != JsonToken.PropertyName ||
+                    !string.Equals(reader.Value as string, "Value", StringComparison.Ordinal))
+                {
+                    throw new JsonSerializationException("The BSON wrapper object must contain a Value property.");
+                }
+
+                if (!reader.Read())
+                {
+                    throw new JsonSerializationException("The BSON wrapper object has no value.");
+                }
+
+                rawValue = typeof(TValue) == typeof(DateTimeOffset) && reader.TokenType == JsonToken.StartObject
+                    ? ReadDateTimeOffsetObject(reader)
+                    : serializer.Deserialize<TValue>(reader);
+
+                if (!reader.Read() || reader.TokenType != JsonToken.EndObject)
+                {
+                    throw new JsonSerializationException("The BSON wrapper object must contain exactly one Value property.");
+                }
+            }
         }
         else
         {
@@ -111,5 +146,55 @@ public sealed class NewtonsoftJsonConverter<TWrapper, TValue> : JsonConverter
 
         // No reflection! Call the static 'From' method directly.
         return TWrapper.From((TValue)rawValue!);
+    }
+
+    private static void WriteDateTimeOffsetObject(JsonWriter writer, DateTimeOffset value)
+    {
+        writer.WriteStartObject();
+        writer.WritePropertyName("UtcTicks");
+        writer.WriteValue(value.UtcTicks);
+        writer.WritePropertyName("OffsetTicks");
+        writer.WriteValue(value.Offset.Ticks);
+        writer.WriteEndObject();
+    }
+
+    private static DateTimeOffset ReadDateTimeOffsetObject(JsonReader reader)
+    {
+        if (!reader.Read() ||
+            reader.TokenType != JsonToken.PropertyName ||
+            !string.Equals(reader.Value as string, "UtcTicks", StringComparison.Ordinal) ||
+            !reader.Read() ||
+            reader.TokenType != JsonToken.Integer)
+        {
+            throw new JsonSerializationException("A DateTimeOffset JSON object must start with UtcTicks.");
+        }
+
+        var utcTicks = Convert.ToInt64(reader.Value, System.Globalization.CultureInfo.InvariantCulture);
+
+        if (!reader.Read() ||
+            reader.TokenType != JsonToken.PropertyName ||
+            !string.Equals(reader.Value as string, "OffsetTicks", StringComparison.Ordinal) ||
+            !reader.Read() ||
+            reader.TokenType != JsonToken.Integer)
+        {
+            throw new JsonSerializationException("A DateTimeOffset JSON object must contain OffsetTicks.");
+        }
+
+        var offsetTicks = Convert.ToInt64(reader.Value, System.Globalization.CultureInfo.InvariantCulture);
+
+        if (!reader.Read() || reader.TokenType != JsonToken.EndObject)
+        {
+            throw new JsonSerializationException("A DateTimeOffset JSON object must end after OffsetTicks.");
+        }
+
+        try
+        {
+            return new DateTimeOffset(utcTicks, TimeSpan.Zero)
+                .ToOffset(TimeSpan.FromTicks(offsetTicks));
+        }
+        catch (ArgumentException exception)
+        {
+            throw new JsonSerializationException("The DateTimeOffset JSON object contains invalid ticks.", exception);
+        }
     }
 }
