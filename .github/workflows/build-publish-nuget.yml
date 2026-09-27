@@ -34,10 +34,16 @@ jobs:
 
       - name: Authenticate with GitHub Packages
         run: |
+          # --store-password-in-clear-text is required: without it the .NET SDK tries to
+          # encrypt the password, which is unsupported off Windows, and the step fails with
+          # "Password encryption is not supported on .NET Core for this platform". The
+          # password is already a secret injected by Actions, and it only ever lands in the
+          # runner's throwaway NuGet.config.
           dotnet nuget add source \
             --username ${{ github.actor }} \
             --password ${{ secrets.GH_PACKAGES_TOKEN }} \
             --name github \
+            --store-password-in-clear-text \
             "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
 
       - name: Restore solution
