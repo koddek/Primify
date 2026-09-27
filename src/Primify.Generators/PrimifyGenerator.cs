@@ -25,6 +25,11 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
     private static readonly string[] EqualityReservedMembers =
         ["ToString", "Equals", "GetHashCode", "op_Equality", "op_Inequality"];
 
+    /// <summary>
+    /// Registers the incremental pipeline: every attributed type declaration is modeled once, filtered
+    /// down to Primify wrappers, and rendered into one generated file per wrapper.
+    /// </summary>
+    /// <param name="context">The Roslyn initialization context the pipeline is attached to.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         Flow.Create()
@@ -90,6 +95,7 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             WrappedTypeIsReferenceType: wrappedTypeSymbol?.IsReferenceType == true,
             IsValueType: typeSymbol.IsValueType,
             IsRecord: node is RecordDeclarationSyntax,
+            EqualityStrategy: ResolveEqualityStrategy(wrappedTypeSymbol),
             HasNormalize: hasNormalize,
             HasValidate: hasValidate,
             InvalidNormalizeSignature: invalidNormalize,
@@ -274,6 +280,8 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
 
     private static bool HasInaccessibleContainingType(INamedTypeSymbol typeSymbol)
     {
+        // Generated code lives at namespace level, so a nested wrapper must itself be reachable from there
+        // and so must every type that encloses it.
         if (typeSymbol.ContainingType is not null && IsInaccessible(typeSymbol))
         {
             return true;
@@ -340,6 +348,58 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
 
         return $"{modifiers} {keyword} {node.Identifier.ValueText}{node.TypeParameterList}{constraints}".Trim();
     }
+
+    private static EqualityStrategy ResolveEqualityStrategy(ITypeSymbol? wrappedType)
+    {
+        if (wrappedType?.SpecialType == SpecialType.System_String)
+        {
+            return EqualityStrategy.OrdinalString;
+        }
+
+        return HasReflexiveOperatorEquality(wrappedType)
+            ? EqualityStrategy.Operator
+            : EqualityStrategy.EqualityComparer;
+    }
+
+    /// <summary>
+    /// Decides from the symbol whether the type's <c>==</c> is reflexive. Floating-point types are
+    /// deliberately excluded because <c>NaN != NaN</c>, so those wrappers must compare through
+    /// <c>EqualityComparer&lt;T&gt;.Default</c> to stay reflexive. Anything unrecognised takes the same
+    /// fallback, which stays correct even for types with an inconsistent <c>==</c> overload.
+    /// </summary>
+    private static bool HasReflexiveOperatorEquality(ITypeSymbol? wrappedType) =>
+        wrappedType?.SpecialType switch
+        {
+            SpecialType.System_Boolean or
+            SpecialType.System_Char or
+            SpecialType.System_SByte or
+            SpecialType.System_Byte or
+            SpecialType.System_Int16 or
+            SpecialType.System_UInt16 or
+            SpecialType.System_Int32 or
+            SpecialType.System_UInt32 or
+            SpecialType.System_Int64 or
+            SpecialType.System_UInt64 or
+            SpecialType.System_IntPtr or
+            SpecialType.System_UIntPtr or
+            SpecialType.System_Decimal or
+            SpecialType.System_DateTime => true,
+            _ => IsSystemType(wrappedType, "Guid")
+                || IsSystemType(wrappedType, "DateTimeOffset")
+                || IsSystemType(wrappedType, "DateOnly")
+                || IsSystemType(wrappedType, "TimeOnly")
+                || IsSystemType(wrappedType, "TimeSpan")
+        };
+
+    /// <summary>
+    /// Identifies a framework type by symbol identity rather than by the spelling the user wrote, so
+    /// aliases and <c>global::</c> qualification do not change the generated equality members.
+    /// </summary>
+    private static bool IsSystemType(ITypeSymbol? symbol, string metadataName) =>
+        symbol is INamedTypeSymbol named &&
+        named.MetadataName == metadataName &&
+        named.ContainingNamespace is { IsGlobalNamespace: false } containingNamespace &&
+        containingNamespace.ToDisplayString() == "System";
 
     private static bool IsNormalizer(IMethodSymbol method, ITypeSymbol? wrappedType) =>
         wrappedType is not null && IsHookShape(method, wrappedType) &&

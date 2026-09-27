@@ -3,6 +3,24 @@ namespace Primify.Generators;
 using Microsoft.CodeAnalysis.Text;
 
 /// <summary>
+/// How a generated wrapper compares its underlying value. Chosen from the wrapped symbol's
+/// <see cref="Microsoft.CodeAnalysis.SpecialType"/> so the decision never depends on how the user
+/// spelled or qualified the type.
+/// </summary>
+internal enum EqualityStrategy
+{
+    /// <summary>Compare with <c>string.Equals(a, b, StringComparison.Ordinal)</c>.</summary>
+    OrdinalString,
+
+    /// <summary>Compare with the type's own <c>==</c> operator, which is reflexive for that type.</summary>
+    Operator,
+
+    /// <summary>Compare with <c>EqualityComparer&lt;T&gt;.Default</c>. Required for types whose
+    /// <c>==</c> is not reflexive, such as the floating-point types where <c>NaN != NaN</c>.</summary>
+    EqualityComparer
+}
+
+/// <summary>
 /// Represents the data required to generate a Primify wrapper.
 /// This is a record to ensure value-based equality for Roslyn caching.
 /// </summary>
@@ -14,6 +32,7 @@ internal record PrimifyModel(
     bool WrappedTypeIsReferenceType,
     bool IsValueType,
     bool IsRecord,
+    EqualityStrategy EqualityStrategy,
     bool HasNormalize,
     bool HasValidate,
     bool InvalidNormalizeSignature,

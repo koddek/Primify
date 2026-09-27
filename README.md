@@ -38,7 +38,8 @@ values instantly.
 - **Non-Throwing Creation:** Every wrapper gets a generated `TryFrom(value, out result)`.
 - **Out-of-the-Box Serialization:** System.Text.Json, Newtonsoft.Json (JSON + BSON), and LiteDB with built-in bridges
   for the full modern primitive set (`DateOnly`, `TimeOnly`, `TimeSpan`, `DateTimeOffset`, `Half`, ...).
-- **Predefined Static Values:** Easily create common instances like `Username.Guest` or `Id.Empty`.
+- **Sentinel Values:** Call the generated private constructor from a static property to define named states such as
+  `Undefined` or `Empty`. They bypass the hooks by design.
 - **IDE Friendly:** Generated types carry `[DebuggerDisplay("{Value}")]` and compile-time diagnostics for hook
   signature mistakes.
 - **High Performance:** Designed for minimal overhead, with benchmarks to prove it.
@@ -144,9 +145,11 @@ var invalidProduct = ProductNumber.Undefined;
 string productName = product1.Value;
 int productNumber = productNum1.Value;
 
-// String representation
-Console.WriteLine(product1); // Output: "ProductName { Value = Premium Widget }"
-Console.WriteLine(productNum1); // Output: "ProductNumber { Value = 42 }"
+// String representation. Record wrappers keep the compiler's ToString, so they print
+// "TypeName { Value = ... }". Plain struct/class wrappers print the bare underlying value.
+Console.WriteLine(product1);   // "ProductName { Value = Premium Widget }"  (record class)
+Console.WriteLine(productNum1); // "ProductNumber { Value = 42 }"             (record struct)
+Console.WriteLine(IntStruct.From(42)); // "42"                              (plain struct)
 
 // Equality comparison works as expected
 var product2 = ProductName.From("Premium Widget");
@@ -321,6 +324,10 @@ public class ProductEntity
 `From` rejects null reference values before calling `Normalize`. A normalizer must not return null; Primify throws
 `ArgumentNullException` if it does. This keeps nullable wrapper properties separate from invalid non-null instances.
 
+On deserialization System.Text.Json resolves JSON `null` before the converter runs, so a reference-type wrapper reads
+back as `null`. A value-type wrapper has no null representation, so it throws a `JsonException` that names the wrapper
+rather than the primitive. Declare the property as `Wrapper?` to represent a missing value.
+
 ## Supported Primitive Types
 
 Primify wraps single-value types and ships built-in LiteDB mappings for the common primitives below. Values without a
@@ -335,15 +342,16 @@ built-in LiteDB bridge are still valid wrapper types, but their persistence mapp
 | `DateTime` | DateTime | normalized to UTC instants (LiteDB stores millisecond precision) |
 | `TimeSpan`, `TimeOnly` | Int64 ticks | lossless |
 | `DateOnly` | DateTime | stored as UTC midnight so the date survives any machine timezone |
-| `DateTimeOffset` | Document `{DateTime, Offset}` | offset preserved exactly; UTC component has millisecond precision |
+| `DateTimeOffset` | Document `{UtcTicks, OffsetTicks}` | instant and offset both exact to the tick |
 
 For Newtonsoft.Json, `DateTimeOffset` uses `{ "UtcTicks": ..., "OffsetTicks": ... }` in standard JSON and inside the BSON
-`Value` field. This avoids local-time conversion and preserves the original offset. Other supported values use their
-normal JSON representation.
+`Value` field. This avoids local-time conversion and preserves the original offset. LiteDB stores the same tick pair
+in its own document. Other supported values use their normal JSON representation.
 
 Other types are not blocked — register your own mapping with
 `LiteDbMapping.Register<TWrapper, TValue>(mapper)` replacement logic or a custom
-`BsonMapper.RegisterType<TWrapper>` call after startup.
+`BsonMapper.RegisterType<TWrapper>` call after startup. A stored document that does not match the shape a mapping
+writes raises a `FormatException` naming the wrapper, instead of failing deeper inside LiteDB.
 
 ## Advanced Usage
 
@@ -377,13 +385,41 @@ Primify is two assemblies acting as one:
    generated partial containing: the `Value` property, private constructor, `From`/`TryFrom`, conversion operators,
    equality members where the kind needs them, `[DebuggerDisplay]`, JSON converter attributes, and a file-scoped
    `[ModuleInitializer]`.
-2. **`Primify` runtime** — the small support library your code references: `IPrimify<TSelf,TValue>` contract, the
-   System.Text.Json and Newtonsoft converters, and `LiteDbMapping`, which owns every LiteDB type bridge in one
-   place. The generated initializer calls `LiteDbMapping.TryRegister<TWrapper,TValue>()` at startup; re-register any
-   type afterwards to override.
+2. **`Primify` runtime** — the small support library your code references:
+
+   | Namespace | Contents |
+   |---|---|
+   | `Primify` | `IPrimify<TSelf, TValue>`, the one contract every generated wrapper implements |
+   | `Primify.Attributes` | `PrimifyAttribute<TPrimitive>` |
+   | `Primify.Converters` | `SystemTextJsonConverter<,>`, `NewtonsoftJsonConverter<,>`, `LiteDbMapping` |
+
+   The generated initializer calls `LiteDbMapping.TryRegister<TWrapper,TValue>()` at startup; re-register any type
+   afterwards to override.
 
 Nothing runs via reflection at serialization time: converters read `.Value` directly and rebuild through the
 static abstract `From`, so validation applies on deserialization exactly as at construction sites.
+
+Generic helpers constrain on the root contract with a single import:
+
+```csharp
+using Primify;
+
+static TSelf Remap<TSelf, TValue>(TSelf wrapper, Func<TValue, TValue> transform)
+    where TSelf : IPrimify<TSelf, TValue>
+    => TSelf.From(transform(wrapper.Value));
+```
+
+### Upgrading from 1.11.x
+
+Two changes affect existing code:
+
+- **`IPrimify<,>` moved** from `Primify.Converters` to the root `Primify` namespace. Replace
+  `using Primify.Converters;` with `using Primify;` in files that constrain on the interface. Attribute usage and
+  serializer adapters are unaffected.
+- **LiteDB `DateTimeOffset` documents changed shape** from `{DateTime, Offset}` to `{UtcTicks, OffsetTicks}`. The old
+  shape silently truncated the instant to milliseconds; the new one is exact to the tick. Reading an old document now
+  throws a `FormatException` that says so, rather than returning a truncated value. Re-index or migrate those
+  documents if you store `DateTimeOffset` wrappers in LiteDB.
 
 ## Best Practices
 

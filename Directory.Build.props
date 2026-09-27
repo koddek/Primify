@@ -22,11 +22,16 @@
         <ImplicitUsings>true</ImplicitUsings>
         <Nullable>enable</Nullable>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
-        <NoWarn>$(NoWarn);CS1591</NoWarn>
 
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <!-- CS1591 is enforced on the shipped projects. Test, sample, and benchmark code has no public
+             surface worth documenting and declares the suppression locally. -->
+        <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
     </PropertyGroup>
 
     <ItemGroup>

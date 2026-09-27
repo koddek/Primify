@@ -14,14 +14,14 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET SDK
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           global-json-file: global.json
-
-      # Step "Decode Signing Key" REMOVED because we disabled signing.
 
       - name: Ensure GitHub Packages token
         env:
@@ -48,6 +48,9 @@ jobs:
 
       - name: Restore solution
         run: dotnet restore Primify.slnx
+
+      - name: Audit packages for known vulnerabilities
+        run: dotnet list Primify.slnx package --vulnerable --include-transitive
 
       - name: Build solution
         run: dotnet build Primify.slnx --configuration Release --no-restore

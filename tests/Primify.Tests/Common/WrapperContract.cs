@@ -1,6 +1,6 @@
 namespace Primify.Generator.Tests.Common;
 
-using Primify.Converters;
+using Primify;
 
 internal static class WrapperContract
 {

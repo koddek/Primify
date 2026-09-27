@@ -13,9 +13,20 @@ strongly-typed wrapper members, validation, equality, conversion operators, and 
 The `Primify` NuGet package contains:
 
 - `Primify.Generators.dll` and `Flowgen.dll` under `analyzers/dotnet/cs`.
-- Runtime types under `Primify.Attributes` and `Primify.Converters`.
-- `Newtonsoft.Json`, `Newtonsoft.Json.Bson`, and `LiteDB` dependencies.
+- `IPrimify<,>` in `Primify`, the contract every generated wrapper implements.
+- `PrimifyAttribute<T>` in `Primify.Attributes`.
+- System.Text.Json, Newtonsoft.Json, and LiteDB adapters in `Primify.Converters`.
 - This skill at `skills/primify/SKILL.md`.
+
+Generic helpers constrain on the root contract, so a single import is enough:
+
+```csharp
+using Primify;
+
+static TSelf Remap<TSelf, TValue>(TSelf wrapper, Func<TValue, TValue> transform)
+    where TSelf : IPrimify<TSelf, TValue>
+    => TSelf.From(transform(wrapper.Value));
+```
 
 ## Declare a wrapper
 
@@ -42,7 +53,8 @@ public sealed partial record class UserName
 ```
 
 Do not declare `Value`, `From`, `TryFrom`, conversion operators, or generated equality members yourself. A conflict
-reports PRIT006.
+reports PRIT006. `PrimifyAttribute<T>` is `AllowMultiple = false`, so a second attributed partial is a `CS0579`
+compile error from the compiler.
 
 ## Hook contract
 
@@ -73,14 +85,20 @@ For a wrapper `W` around `T`:
 | `implicit operator T(W value)` | Leaves the wrapper and cannot fail. |
 | `ToString` and equality | Record types use compiler-generated members; plain types use generated members. |
 
+Plain `class`/`struct` wrappers print the bare underlying value from `ToString`. Record wrappers keep the compiler's
+`ToString`, which prints `TypeName { Value = ... }`.
+
 Use `From` at trusted construction sites and `TryFrom` at input, configuration, and external-data boundaries. Do not use
-`default` as proof of validity. Predefined sentinel values call the private constructor and bypass hooks by design.
+`default` as proof of validity. Sentinel values call the private constructor and bypass hooks by design.
 
 ## Serialization
 
 ### System.Text.Json
 
 The generated converter writes the bare primitive and rebuilds through `From`. Nullable wrapper properties can be null.
+System.Text.Json resolves JSON `null` before the converter runs, so a reference-type wrapper reads back as `null`. A
+value-type wrapper throws a `JsonException` naming the wrapper, because it cannot represent a missing value; declare the
+property as `Wrapper?`.
 
 ### Newtonsoft.Json
 
@@ -95,7 +113,9 @@ The generated module initializer calls `LiteDbMapping.TryRegister<W, T>()`. Buil
 unsupported wrapper explicitly with `BsonMapper.RegisterType<W>(...)` or a custom `LiteDbMapping.Register` path.
 
 Built-in storage mappings include native BSON values, checked integer conversions, `DateTime` UTC values, `TimeSpan`
-and `TimeOnly` ticks, `DateOnly` UTC midnight, and a `{ DateTime, Offset }` document for `DateTimeOffset`.
+and `TimeOnly` ticks, `DateOnly` UTC midnight, and a `{ UtcTicks, OffsetTicks }` document for `DateTimeOffset`, which
+keeps both the instant and the offset exact to the tick. A stored document that does not match the shape a mapping
+writes raises a `FormatException` naming the wrapper.
 
 ## Diagnostics
 
@@ -113,3 +133,6 @@ and `TimeOnly` ticks, `DateOnly` UTC midnight, and a `{ DateTime, Offset }` docu
 After changing a wrapper, build the consumer and run its tests. Cover `From`, validation failure, `TryFrom` failure,
 the serializer used by the consumer, equality or hash use when stored in collections, and any custom LiteDB mapping.
 For generator changes, run the full test executable and include compile-backed cases for generated source.
+
+For a `DateTimeOffset` wrapper, test with a sub-millisecond value. The LiteDB bridge is tick-based, so a value that
+would have been truncated by a BSON `DateTime` must still compare equal after a round trip.

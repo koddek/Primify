@@ -24,7 +24,7 @@ internal static class PrimifyRenderer
                      #nullable enable
 
                      using System;
-                     using System.Runtime.CompilerServices;
+                     using Primify;
                      using Primify.Converters;
 
                      {{namespaceDeclaration}}
@@ -42,7 +42,7 @@ internal static class PrimifyRenderer
                      #nullable enable
 
                      using System;
-                     using System.Runtime.CompilerServices;
+                     using Primify;
                      using Primify.Converters;
 
                      {{liteDb}}
@@ -56,7 +56,7 @@ internal static class PrimifyRenderer
                  #nullable enable
 
                  using System;
-                 using System.Runtime.CompilerServices;
+                 using Primify;
                  using Primify.Converters;
 
                  namespace {{model.Namespace}}
@@ -234,15 +234,14 @@ internal static class PrimifyRenderer
 
     private static string GenerateEqualityMembers(PrimifyModel model)
     {
-        var name = model.ClassName;
-        var arg = model.WrappedType;
-        var (equalsExpr, hashCodeExpr) = GetEqualityExpressions(arg);
-
         // For record types, let the compiler generate optimized equality
         if (model.IsRecord)
         {
             return string.Empty;
         }
+
+        var name = model.ClassName;
+        var (equalsExpr, hashCodeExpr) = GetEqualityExpressions(model.EqualityStrategy, model.WrappedType);
 
         if (model.IsValueType)
         {
@@ -290,54 +289,23 @@ internal static class PrimifyRenderer
                  """;
     }
 
-    private static (Func<string, string, string> equalsExpr, Func<string, string> hashCodeExpr) GetEqualityExpressions(string wrappedType)
-    {
-        // For strings, use direct comparison for better performance
-        if (wrappedType == "string" || wrappedType == "System.String")
+    private static (Func<string, string, string> equalsExpr, Func<string, string> hashCodeExpr) GetEqualityExpressions(
+        EqualityStrategy strategy,
+        string wrappedType) => strategy switch
         {
-            return (
+            EqualityStrategy.OrdinalString => (
                 (left, right) => $"string.Equals({left}, {right}, System.StringComparison.Ordinal)",
                 value => $"{value}?.GetHashCode() ?? 0"
-            );
-        }
-
-        // For primitive value types with reliable operator equality, use ==.
-        // Floating-point values use EqualityComparer so NaN remains reflexive.
-        if (IsPrimitiveValueType(wrappedType))
-        {
-            return (
+            ),
+            EqualityStrategy.Operator => (
                 (left, right) => $"{left} == {right}",
                 value => $"{value}.GetHashCode()"
-            );
-        }
-
-        // For other types, fall back to EqualityComparer.Default
-        return (
-            (left, right) => $"System.Collections.Generic.EqualityComparer<{wrappedType}>.Default.Equals({left}, {right})",
-            value => $"System.Collections.Generic.EqualityComparer<{wrappedType}>.Default.GetHashCode({value})"
-        );
-    }
-
-    private static bool IsPrimitiveValueType(string type)
-    {
-        return type switch
-        {
-            "int" or "System.Int32" => true,
-            "long" or "System.Int64" => true,
-            "short" or "System.Int16" => true,
-            "byte" or "System.Byte" => true,
-            "bool" or "System.Boolean" => true,
-            "char" or "System.Char" => true,
-            "decimal" or "System.Decimal" => true,
-            "Guid" or "System.Guid" => true,
-            "DateTime" or "System.DateTime" => true,
-            "DateTimeOffset" or "System.DateTimeOffset" => true,
-            "DateOnly" or "System.DateOnly" => true,
-            "TimeOnly" or "System.TimeOnly" => true,
-            "TimeSpan" or "System.TimeSpan" => true,
-            _ => false
+            ),
+            _ => (
+                (left, right) => $"System.Collections.Generic.EqualityComparer<{wrappedType}>.Default.Equals({left}, {right})",
+                value => $"System.Collections.Generic.EqualityComparer<{wrappedType}>.Default.GetHashCode({value})"
+            )
         };
-    }
 
     private static string RenderLiteDbInitializer(PrimifyModel model)
     {

@@ -11,8 +11,10 @@ using System.Text.Json.Serialization;
 /// <remarks>
 /// Reads deserialize the inner value first, then rebuild the wrapper through
 /// <see cref="IPrimify{TSelf, TValue}.From(TValue)"/> — so invalid payloads throw the wrapper's
-/// validation exception instead of producing an unvalidated instance. JSON <c>null</c> is handled
-/// by System.Text.Json itself and never reaches <see cref="Read"/>.
+/// validation exception instead of producing an unvalidated instance. System.Text.Json resolves JSON
+/// <c>null</c> before calling this converter for a reference-type wrapper, which therefore reads back as
+/// <see langword="null"/>. A value-type wrapper has no such representation, so it rejects the token with a
+/// <see cref="JsonException"/> that names the wrapper instead of the primitive it wraps.
 /// </remarks>
 /// <typeparam name="TWrapper">The generated wrapper type.</typeparam>
 /// <typeparam name="TValue">The underlying primitive type.</typeparam>
@@ -26,11 +28,21 @@ public sealed class SystemTextJsonConverter<TWrapper, TValue> : JsonConverter<TW
     /// <param name="typeToConvert">The wrapper type being deserialized.</param>
     /// <param name="options">The serializer options used for the inner value.</param>
     /// <returns>A wrapper instance rebuilt through <see cref="IPrimify{TSelf, TValue}.From(TValue)"/>.</returns>
+    /// <exception cref="JsonException">
+    /// The payload was JSON <c>null</c>, which a value-type wrapper cannot represent.
+    /// </exception>
     /// <exception cref="ArgumentException">
     /// The payload held a value that the wrapper's <c>Validate</c> hook rejected.
     /// </exception>
     public override TWrapper? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            throw new JsonException(
+                $"Cannot read JSON null as {typeof(TWrapper)}, which is a value type. " +
+                "Use a nullable wrapper property to represent a missing value.");
+        }
+
         var innerValue = JsonSerializer.Deserialize<TValue>(ref reader, options);
 
         return TWrapper.From(innerValue!);

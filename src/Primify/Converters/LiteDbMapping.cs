@@ -1,7 +1,6 @@
 namespace Primify.Converters;
 
 using System;
-using System.Globalization;
 using LiteDB;
 
 /// <summary>
@@ -32,12 +31,15 @@ public static class LiteDbMapping
     /// <c>ushort</c>, <c>char</c> (Int32), <c>uint</c>/<c>ulong</c> (Int64; overflow throws),
     /// <c>float</c>/<c>Half</c> (Double), <c>TimeSpan</c>/<c>TimeOnly</c> (Int64 ticks),
     /// <c>DateOnly</c> (UTC-midnight DateTime), and <c>DateTimeOffset</c> (document
-    /// <c>{DateTime, Offset}</c>; offset preserved exactly).
+    /// <c>{UtcTicks, OffsetTicks}</c>; instant and offset both exact to the tick).
     /// </para>
     /// </remarks>
     /// <exception cref="NotSupportedException">
     /// <typeparamref name="TValue"/> has no built-in bridge. Wrap a supported primitive instead, or
     /// register a custom mapping directly on the mapper after startup.
+    /// </exception>
+    /// <exception cref="FormatException">
+    /// A stored document does not match the shape this mapping writes.
     /// </exception>
     /// <example>
     /// <code>
@@ -228,8 +230,8 @@ public static class LiteDbMapping
                 bson => new TimeOnly(bson.AsInt64));
         }
 
-        // Offset survives via a companion field. The UTC component is truncated to milliseconds
-        // by the LiteDB storage engine itself; the offset is preserved exactly.
+        // LiteDB has no native DateTimeOffset type and its BSON DateTime is millisecond-precision, so both
+        // components are stored as raw tick counts. That keeps the instant exact to the tick and the offset exact.
         if (type == typeof(DateTimeOffset))
         {
             return (
@@ -238,21 +240,58 @@ public static class LiteDbMapping
                     var dto = (DateTimeOffset)value;
                     return new BsonDocument
                     {
-                        ["DateTime"] = new BsonValue(dto.UtcDateTime),
-                        ["Offset"] = new BsonValue(dto.Offset.Ticks),
+                        ["UtcTicks"] = new BsonValue(dto.UtcTicks),
+                        ["OffsetTicks"] = new BsonValue(dto.Offset.Ticks),
                     };
                 },
-                bson =>
-                {
-                    var doc = bson.AsDocument;
-                    var utcTicks = doc["DateTime"].AsDateTime.ToUniversalTime();
-                    var utc = new DateTimeOffset(System.DateTime.SpecifyKind(utcTicks, DateTimeKind.Utc));
-                    return utc.ToOffset(new TimeSpan(doc["Offset"].AsInt64));
-                });
+                bson => ReadDateTimeOffset<TWrapper>(bson));
         }
 
         throw new UnsupportedLiteDbTypeException(typeof(TValue), typeof(TWrapper));
     }
+
+    private static DateTimeOffset ReadDateTimeOffset<TWrapper>(BsonValue bson)
+    {
+        if (bson is not BsonDocument document)
+        {
+            throw MalformedValue<TWrapper>(
+                $"expected a '{{ UtcTicks, OffsetTicks }}' document but found {bson.Type}.");
+        }
+
+        if (!TryReadTicks(document, "UtcTicks", out var utcTicks) ||
+            !TryReadTicks(document, "OffsetTicks", out var offsetTicks))
+        {
+            throw MalformedValue<TWrapper>(
+                "the document is missing integer 'UtcTicks' and 'OffsetTicks' fields. Documents written by " +
+                "Primify 1.11.x used a '{ DateTime, Offset }' shape that lost sub-millisecond precision; " +
+                "re-index or migrate them to the tick-based shape.");
+        }
+
+        try
+        {
+            return new DateTimeOffset(utcTicks, TimeSpan.Zero).ToOffset(TimeSpan.FromTicks(offsetTicks));
+        }
+        catch (ArgumentException exception)
+        {
+            throw MalformedValue<TWrapper>($"the stored ticks are not a valid instant ({exception.Message}).");
+        }
+    }
+
+    private static bool TryReadTicks(BsonDocument document, string field, out long ticks)
+    {
+        ticks = 0;
+
+        if (!document.TryGetValue(field, out var value) || value.Type != BsonType.Int64)
+        {
+            return false;
+        }
+
+        ticks = value.AsInt64;
+        return true;
+    }
+
+    private static FormatException MalformedValue<TWrapper>(string reason) =>
+        new($"Primify cannot read the stored BSON value for '{typeof(TWrapper).Name}': {reason}");
 
     private sealed class UnsupportedLiteDbTypeException : NotSupportedException
     {

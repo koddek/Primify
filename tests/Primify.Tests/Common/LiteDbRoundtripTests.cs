@@ -1,6 +1,7 @@
 namespace Primify.Generator.Tests.Common;
 
 using LiteDB;
+using Primify.Converters;
 
 [NotInParallel]
 public class LiteDbRoundtripTests
@@ -168,6 +169,84 @@ public class LiteDbRoundtripTests
         var value = new DateTimeOffset(2026, 8, 25, 13, 45, 59, TimeSpan.FromHours(5.5));
 
         await RoundTrips(DateTimeOffsetValue.From(value));
+    }
+
+    [Test]
+    public async Task DateTimeOffset_Preserves_SubMillisecond_Ticks()
+    {
+        var value = new DateTimeOffset(2026, 8, 25, 13, 45, 59, TimeSpan.FromHours(5.5)).AddTicks(1_234);
+
+        await RoundTrips(DateTimeOffsetValue.From(value));
+    }
+
+    [Test]
+    public async Task DateTimeOffset_Stores_Tick_Based_Document()
+    {
+        var value = new DateTimeOffset(2026, 8, 25, 13, 45, 59, TimeSpan.FromHours(5.5));
+        var mapper = new BsonMapper();
+        LiteDbMapping.Register<DateTimeOffsetValue, DateTimeOffset>(mapper);
+
+        var document = mapper.Serialize<DateTimeOffsetValue>(DateTimeOffsetValue.From(value)).AsDocument;
+
+        await Assert.That(document["UtcTicks"].AsInt64).IsEqualTo(value.UtcTicks);
+        await Assert.That(document["OffsetTicks"].AsInt64).IsEqualTo(value.Offset.Ticks);
+    }
+
+    private static async Task AssertMalformedDocumentRejected(Func<BsonDocument> malformed)
+    {
+        var mapper = new BsonMapper();
+        LiteDbMapping.Register<DateTimeOffsetValue, DateTimeOffset>(mapper);
+
+        var exception = await Assert.ThrowsAsync<FormatException>(
+            async () => mapper.Deserialize<DateTimeOffsetValue>(malformed()));
+
+        await Assert.That(exception!.Message).Contains("DateTimeOffsetValue");
+    }
+
+    [Test]
+    public async Task DateTimeOffset_Rejects_Previous_Document_Shape()
+    {
+        // 1.11.x stored a BSON DateTime, which truncates to milliseconds and is no longer readable.
+        await AssertMalformedDocumentRejected(() => new BsonDocument
+        {
+            ["DateTime"] = new BsonValue(new DateTime(2026, 8, 25, 13, 45, 59, DateTimeKind.Utc)),
+            ["Offset"] = new BsonValue(TimeSpan.FromHours(5.5).Ticks),
+        });
+    }
+
+    [Test]
+    public async Task DateTimeOffset_Rejects_NonInteger_Ticks()
+    {
+        await AssertMalformedDocumentRejected(() => new BsonDocument
+        {
+            ["UtcTicks"] = new BsonValue("not-a-number"),
+            ["OffsetTicks"] = new BsonValue(0L),
+        });
+    }
+
+    [Test]
+    public async Task DateTimeOffset_Rejects_Missing_Offset_Ticks()
+    {
+        await AssertMalformedDocumentRejected(() => new BsonDocument
+        {
+            ["UtcTicks"] = new BsonValue(new DateTimeOffset(2026, 8, 25, 13, 45, 59, TimeSpan.Zero).UtcTicks),
+        });
+    }
+
+    [Test]
+    public async Task DateTimeOffset_Rejects_Null_Ticks()
+    {
+        await AssertMalformedDocumentRejected(() => new BsonDocument
+        {
+            ["UtcTicks"] = BsonValue.Null,
+            ["OffsetTicks"] = BsonValue.Null,
+        });
+    }
+
+    [Test]
+    public async Task DateTimeOffset_Rejects_NonDocument_Value()
+    {
+        await AssertMalformedDocumentRejected(() => new BsonDocument { ["Value"] = 42 });
     }
 
     [Test]

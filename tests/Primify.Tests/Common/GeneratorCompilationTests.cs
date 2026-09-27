@@ -118,6 +118,30 @@ public class GeneratorCompilationTests
         await Assert.That(generated).IsNotNull();
     }
 
+    [Test]
+    public async Task DuplicateAttribute_Reports_Compiler_Error_Without_Extra_Generation()
+    {
+        // [Primify<T>] is AllowMultiple = false, so this never compiles. The generator must not paper over
+        // the compiler's own diagnostic with a hint-name collision, and it must not emit two copies.
+        const string code = """
+                            using Primify.Attributes;
+
+                            namespace Snap;
+
+                            [Primify<int>]
+                            public partial record struct SplitWrapper;
+
+                            [Primify<int>]
+                            public partial record struct SplitWrapper
+                            {
+                            }
+                            """;
+
+        var (diagnostics, _) = GeneratorSnapshotTests.Generate(code);
+
+        await Assert.That(diagnostics.Any(diagnostic => diagnostic.Id == "CS0579")).IsTrue();
+    }
+
     private static async Task AssertNoErrors(ImmutableArray<Diagnostic> diagnostics)
     {
         var errors = diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
