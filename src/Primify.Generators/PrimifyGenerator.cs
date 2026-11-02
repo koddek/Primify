@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using Flowgen;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -8,10 +9,12 @@ namespace Primify.Generators;
 /// Incremental source generator completing <c>[Primify&lt;T&gt;]</c>-annotated partial types into
 /// validated primitive wrappers. For each annotated type it emits a generated part containing the
 /// <c>Value</c> property, private constructor, <c>From</c>/<c>TryFrom</c> factories, conversion
-/// operators, serializer attributes, equality members where the kind needs them, and a LiteDB
-/// mapping initializer. Diagnostics: PRIT001 invalid wrapped type, PRIT002/PRIT003 hook signature
-/// errors, PRIT004 non-partial containing type, PRIT005 unsupported declarations,
-/// and PRIT006 reserved member conflicts.
+/// operators, serializer attributes, and equality members where the kind needs them. When the consumer
+/// references LiteDB or Newtonsoft.Json, it additionally emits one shared adapter source per compilation
+/// that converts wrappers to the serializer's native types at the point of serialization, so the Primify
+/// package itself carries no serializer dependency. Diagnostics: PRIT001 invalid wrapped type,
+/// PRIT002/PRIT003 hook signature errors, PRIT004 non-partial containing type, PRIT005 unsupported
+/// declarations, PRIT006 reserved member conflicts, and PRIT007 LiteDB referenced without a built-in bridge.
 /// </summary>
 [Generator]
 public sealed class PrimifyGenerator : IIncrementalGenerator
@@ -40,6 +43,20 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             .Emit(static (spc, model) => GenerateCode(spc, model))
             .Build()
             .Initialize(context);
+
+        // Serializer adapter emission: one shared source per consumer compilation, emitted only when the
+        // consumer references the matching serializer package (LiteDB, Newtonsoft.Json, Newtonsoft.Json.Bson).
+        var adapterModels = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => node is TypeDeclarationSyntax declaration && declaration.AttributeLists.Count > 0,
+                static (syntaxContext, _) => BuildModel(syntaxContext))
+            .Where(static model => model is not null)
+            .Select(static (model, _) => (PrimifyModel)model!)
+            .Collect();
+
+        context.RegisterSourceOutput(
+            adapterModels.Combine(context.CompilationProvider),
+            static (spc, pair) => GenerateAdapters(spc, pair.Left, pair.Right));
     }
 
     private static bool IsPrimifyAttribute(AttributeData attribute) =>
@@ -87,6 +104,8 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
         var invalidValidate = validateMembers.Any(member =>
             member is not IMethodSymbol method || !IsValidator(method, wrappedTypeSymbol));
 
+        var compilation = context.SemanticModel.Compilation;
+
         return new PrimifyModel(
             Namespace: typeSymbol.ContainingNamespace.ToDisplayString(),
             ClassName: typeSymbol.Name,
@@ -103,7 +122,11 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             UnsupportedDeclarationReason: GetUnsupportedDeclarationReason(node, typeSymbol, containingTypes),
             ReservedMemberConflict: GetReservedMemberConflict(typeSymbol, wrappedTypeSymbol),
             Location: DiagnosticLocation.From(node.Identifier.GetLocation()),
-            ContainingTypes: containingTypes
+            ContainingTypes: containingTypes,
+            LiteDbAvailable: compilation.GetTypeByMetadataName("LiteDB.BsonMapper") is not null,
+            LiteDbStorage: LiteDbStorage.Classify(wrappedTypeSymbol),
+            NewtonsoftAvailable: compilation.GetTypeByMetadataName("Newtonsoft.Json.JsonConverter") is not null,
+            NewtonsoftBsonAvailable: compilation.GetTypeByMetadataName("Newtonsoft.Json.Bson.BsonDataWriter") is not null
         );
     }
 
@@ -179,8 +202,50 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             return;
         }
 
+        if (model is { LiteDbAvailable: true, LiteDbStorage: LiteDbStorageKind.None })
+        {
+            context.ReportDiagnostic(Diagnostic.Create(
+                Diagnostics.NoLiteDbBridge,
+                location,
+                model.TypeName,
+                model.WrappedType));
+        }
+
         var source = PrimifyRenderer.Render(model);
         context.AddSource(model.HintName, source);
+    }
+
+    private static void GenerateAdapters(
+        SourceProductionContext context,
+        ImmutableArray<PrimifyModel> models,
+        Compilation compilation)
+    {
+        if (models.Length == 0)
+        {
+            return;
+        }
+
+        if (compilation.GetTypeByMetadataName("Newtonsoft.Json.JsonConverter") is not null)
+        {
+            var bsonAvailable = compilation.GetTypeByMetadataName("Newtonsoft.Json.Bson.BsonDataWriter") is not null;
+            context.AddSource(
+                "Primify.NewtonsoftJsonConverter.g.cs",
+                SerializerAdapterRenderer.RenderNewtonsoftConverter(bsonAvailable));
+        }
+
+        if (compilation.GetTypeByMetadataName("LiteDB.BsonMapper") is not null)
+        {
+            var registrable = models
+                .Where(static model => model.IsGeneratable && model.LiteDbStorage != LiteDbStorageKind.None)
+                .ToArray();
+
+            if (registrable.Length > 0)
+            {
+                context.AddSource(
+                    "Primify.LiteDbRegistration.g.cs",
+                    SerializerAdapterRenderer.RenderLiteDbRegistration(registrable));
+            }
+        }
     }
 
     private static string? GetReservedMemberConflict(INamedTypeSymbol typeSymbol, ITypeSymbol? wrappedType)

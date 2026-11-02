@@ -10,13 +10,16 @@ strongly-typed wrapper members, validation, equality, conversion operators, and 
 
 ## Package layout
 
-The `Primify` NuGet package contains:
+The `Primify` NuGet package has no dependencies and contains:
 
 - `Primify.Generators.dll` and `Flowgen.dll` under `analyzers/dotnet/cs`.
 - `IPrimify<,>` in `Primify`, the contract every generated wrapper implements.
 - `PrimifyAttribute<T>` in `Primify.Attributes`.
-- System.Text.Json, Newtonsoft.Json, and LiteDB adapters in `Primify.Converters`.
+- The System.Text.Json adapter `SystemTextJsonConverter<,>` in `Primify.Converters`.
 - This skill at `skills/primify/SKILL.md`.
+
+Newtonsoft.Json and LiteDB adapters are not in the package. When the consuming project references those packages, the
+generator emits the adapters into the consumer assembly at compile time, so support appears automatically.
 
 Generic helpers constrain on the root contract, so a single import is enough:
 
@@ -102,15 +105,18 @@ property as `Wrapper?`.
 
 ### Newtonsoft.Json
 
-Standard JSON writes the bare primitive. `DateTimeOffset` uses `{ "UtcTicks": ..., "OffsetTicks": ... }` because
-Json.NET otherwise converts ISO values to the local offset before the wrapper converter runs. BSON wraps the value in
-`{ "Value": ... }`; a `DateTimeOffset` uses the tick object inside `Value`. Malformed BSON objects are rejected.
+Generated only when the project references `Newtonsoft.Json` (the BSON branches also need `Newtonsoft.Json.Bson`): a
+`NewtonsoftJsonConverter<W, T>` emitted into the consumer assembly and attached to every wrapper via
+`[JsonConverter]`. Standard JSON writes the bare primitive. `DateTimeOffset` uses `{ "UtcTicks": ..., "OffsetTicks": ... }`
+because Json.NET otherwise converts ISO values to the local offset before the wrapper converter runs. BSON wraps the
+value in `{ "Value": ... }`; a `DateTimeOffset` uses the tick object inside `Value`. Malformed BSON objects are rejected.
 
 ### LiteDB
 
-The generated module initializer calls `LiteDbMapping.TryRegister<W, T>()`. Built-in values register on
-`BsonMapper.Global`. Values without a built-in bridge are skipped, so they do not crash assembly startup. Register an
-unsupported wrapper explicitly with `BsonMapper.RegisterType<W>(...)` or a custom `LiteDbMapping.Register` path.
+Generated only when the project references `LiteDB`: a `LiteDbRegistration` class whose `[ModuleInitializer]` registers
+every wrapper with a built-in bridge on `BsonMapper.Global`; call `LiteDbRegistration.Register(mapper)` for a custom
+mapper. Values without a built-in bridge are skipped (PRIT007 warns at compile time), so they do not crash assembly
+startup. Register an unsupported wrapper explicitly with `BsonMapper.RegisterType<W>(...)` after startup.
 
 Built-in storage mappings include native BSON values, checked integer conversions, `DateTime` UTC values, `TimeSpan`
 and `TimeOnly` ticks, `DateOnly` UTC midnight, and a `{ UtcTicks, OffsetTicks }` document for `DateTimeOffset`, which
@@ -127,6 +133,7 @@ writes raises a `FormatException` naming the wrapper.
 | PRIT004 | A containing type is not partial. |
 | PRIT005 | Unsupported declaration shape or inaccessible nested wrapper. |
 | PRIT006 | Reserved generated member conflict. |
+| PRIT007 | LiteDB is referenced but the wrapped type has no built-in LiteDB bridge (warning). |
 
 ## Agent verification
 

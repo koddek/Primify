@@ -1,6 +1,8 @@
 # Primify API
 
-Primify targets .NET 10. The package contains the runtime support library and the incremental source generator.
+Primify targets .NET 10. The package contains the runtime support library and the incremental source generator, and has
+no package dependencies. Serializer adapters for Newtonsoft.Json and LiteDB are generated into the consumer assembly at
+compile time, only when that package is referenced; System.Text.Json ships in the framework and is always wired up.
 
 ## Namespaces
 
@@ -8,7 +10,7 @@ Primify targets .NET 10. The package contains the runtime support library and th
 |---|---|
 | `Primify` | `IPrimify<TSelf, TValue>`, the contract every generated wrapper implements |
 | `Primify.Attributes` | `PrimifyAttribute<TPrimitive>` |
-| `Primify.Converters` | `SystemTextJsonConverter<TWrapper, TValue>`, `NewtonsoftJsonConverter<TWrapper, TValue>`, `LiteDbMapping` |
+| `Primify.Converters` | `SystemTextJsonConverter<TWrapper, TValue>` (Newtonsoft.Json and LiteDB adapters are generated into the consumer, not shipped here) |
 
 ## Declaration
 
@@ -73,6 +75,7 @@ Other exceptions escape `TryFrom`.
 | PRIT004 | A containing type is not partial. |
 | PRIT005 | The declaration is unsupported, including generic, static, abstract, file-local, ref-like, or inaccessible wrappers. |
 | PRIT006 | A user declaration conflicts with a generated member. |
+| PRIT007 | LiteDB is referenced but the wrapped type has no built-in LiteDB bridge (warning). |
 
 ## Serialization
 
@@ -84,16 +87,19 @@ representation and throws a `JsonException` naming the wrapper; declare the prop
 
 ### Newtonsoft.Json
 
-Standard JSON writes the underlying primitive. `DateTimeOffset` is represented as an object with `UtcTicks` and
-`OffsetTicks` so its original offset survives Json.NET date tokenization. BSON wraps values in `{ "Value": ... }`; a
-`DateTimeOffset` value uses the same tick object inside `Value`. Malformed objects are rejected.
+Emitted only when the consumer references `Newtonsoft.Json` (plus `Newtonsoft.Json.Bson` for the BSON branches): a
+generated `NewtonsoftJsonConverter<TWrapper, TValue>` in `Primify.Converters`, attached to every wrapper via
+`[JsonConverter]`. Standard JSON writes the underlying primitive. `DateTimeOffset` is represented as an object with
+`UtcTicks` and `OffsetTicks` so its original offset survives Json.NET date tokenization. BSON wraps values in
+`{ "Value": ... }`; a `DateTimeOffset` value uses the same tick object inside `Value`. Malformed objects are rejected.
 
 ### LiteDB
 
-The generated module initializer calls `LiteDbMapping.TryRegister<TWrapper, TValue>()`. Built-in mappings are
-registered on `BsonMapper.Global`. Values without a built-in bridge are skipped rather than failing assembly startup.
-Register those values explicitly with `BsonMapper.RegisterType<TWrapper>(...)` or `LiteDbMapping.Register` when a
-custom bridge is available.
+Emitted only when the consumer references `LiteDB`: one shared source per assembly with a `LiteDbRegistration` class.
+Its `[ModuleInitializer]` registers every wrapper with a built-in bridge on `BsonMapper.Global`; call
+`LiteDbRegistration.Register(mapper)` for a custom mapper. Values without a built-in bridge are skipped (PRIT007 warns
+at compile time) rather than failing assembly startup. Register those values explicitly with
+`BsonMapper.RegisterType<TWrapper>(...)` when a custom bridge is available.
 
 A stored document that does not match the shape a mapping writes raises a `FormatException` naming the wrapper.
 

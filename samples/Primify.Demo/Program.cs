@@ -22,6 +22,13 @@ public static class Program
         var val = ItemName.From("bar");
         Console.WriteLine(val.ToString()); // ItemName { Value = bar }
         Console.WriteLine(val.Value); // bar
+        Console.WriteLine();
+
+        // Newtonsoft.Json support is generated because this project references Newtonsoft.Json
+        var json = Newtonsoft.Json.JsonConvert.SerializeObject(val);
+        var valBack = Newtonsoft.Json.JsonConvert.DeserializeObject<ItemName>(json);
+        Console.WriteLine($"Newtonsoft roundtrip: {valBack} ({json})");
+        Console.WriteLine();
 
         // Automatic registration with BsonMapper
         using var db = new LiteDatabase(":memory:");

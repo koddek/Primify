@@ -3,15 +3,15 @@ namespace Primify.Generators;
 using System.Text;
 
 /// <summary>
-/// Renders the generated source text for a <see cref="PrimifyModel"/>: the wrapper declaration,
-/// its members, and the file-scoped LiteDB registration initializer.
+/// Renders the generated source text for a <see cref="PrimifyModel"/>: the wrapper declaration and its
+/// members. Serializer adapters (LiteDB, Newtonsoft.Json) are rendered separately per compilation by
+/// <see cref="SerializerAdapterRenderer"/>, only when the consumer references those packages.
 /// </summary>
 internal static class PrimifyRenderer
 {
     public static string Render(PrimifyModel model)
     {
         var wrapper = RenderWrapper(model);
-        var liteDb = RenderLiteDbInitializer(model);
 
         if (model.ContainingTypes.IsEmpty)
         {
@@ -29,8 +29,6 @@ internal static class PrimifyRenderer
 
                      {{namespaceDeclaration}}
 
-                     {{liteDb}}
-
                      {{wrapper}}
                      """;
         }
@@ -44,8 +42,6 @@ internal static class PrimifyRenderer
                      using System;
                      using Primify;
                      using Primify.Converters;
-
-                     {{liteDb}}
 
                      {{RenderContainingTypes(model, wrapper)}}
                      """;
@@ -61,8 +57,6 @@ internal static class PrimifyRenderer
 
                  namespace {{model.Namespace}}
                  {
-                 {{Indent(liteDb)}}
-
                  {{RenderContainingTypes(model, wrapper)}}
                  }
                  """;
@@ -77,7 +71,10 @@ internal static class PrimifyRenderer
         var sb = new StringBuilder();
         sb.AppendLine("[System.Diagnostics.DebuggerDisplay(\"{Value}\")]");
         sb.AppendLine($"[System.Text.Json.Serialization.JsonConverter(typeof(SystemTextJsonConverter<{name}, {type}>))]");
-        sb.AppendLine($"[Newtonsoft.Json.JsonConverter(typeof(NewtonsoftJsonConverter<{name}, {type}>))]");
+        if (model.NewtonsoftAvailable)
+        {
+            sb.AppendLine($"[Newtonsoft.Json.JsonConverter(typeof(NewtonsoftJsonConverter<{name}, {type}>))]");
+        }
         sb.AppendLine($"{modifier}partial {model.Keyword} {name} : IPrimify<{name}, {type}>, IEquatable<{name}>");
         sb.AppendLine("{");
         sb.AppendLine("    /// <summary>Gets the wrapped primitive value.</summary>");
@@ -307,35 +304,4 @@ internal static class PrimifyRenderer
             )
         };
 
-    private static string RenderLiteDbInitializer(PrimifyModel model)
-    {
-        string name = model.FullyQualifiedTypeName;
-        string initializerName = SanitizeIdentifier($"{model.TypeName}LiteDbInitializer");
-        string arg = model.WrappedType;
-
-        return $$"""
-                 file static class {{initializerName}}
-                 {
-                     [System.Runtime.CompilerServices.ModuleInitializer]
-                     internal static void Register()
-                     {
-                         Primify.Converters.LiteDbMapping.TryRegister<{{name}}, {{arg}}>();
-                     }
-                 }
-                 """;
-    }
-
-    private static string SanitizeIdentifier(string value)
-    {
-        var characters = value.ToCharArray();
-        for (var index = 0; index < characters.Length; index++)
-        {
-            if (!char.IsLetterOrDigit(characters[index]) && characters[index] != '_')
-            {
-                characters[index] = '_';
-            }
-        }
-
-        return new string(characters);
-    }
 }

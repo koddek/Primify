@@ -40,7 +40,11 @@ internal record PrimifyModel(
     string? UnsupportedDeclarationReason,
     string? ReservedMemberConflict,
     DiagnosticLocation Location,
-    EquatableArray<ContainingTypeModel> ContainingTypes
+    EquatableArray<ContainingTypeModel> ContainingTypes,
+    bool LiteDbAvailable,
+    LiteDbStorageKind LiteDbStorage,
+    bool NewtonsoftAvailable,
+    bool NewtonsoftBsonAvailable
 )
 {
     public bool IsGlobalNamespace => string.IsNullOrWhiteSpace(Namespace) || Namespace == "<global namespace>";
@@ -62,6 +66,15 @@ internal record PrimifyModel(
         : $"{Namespace}.{TypeName}.g.cs";
 
     public bool HasUnsupportedContainingType => ContainingTypes.Any(type => !type.IsPartial);
+
+    /// <summary>True when the wrapper itself is generated, i.e. no blocking diagnostic was reported.</summary>
+    public bool IsGeneratable =>
+        WrappedType != "object" &&
+        UnsupportedDeclarationReason is null &&
+        ReservedMemberConflict is null &&
+        !InvalidNormalizeSignature &&
+        !InvalidValidateSignature &&
+        !HasUnsupportedContainingType;
 }
 
 /// <summary>

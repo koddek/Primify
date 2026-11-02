@@ -10,8 +10,10 @@ using System;
 /// <remarks>
 /// <para>
 /// The generator adds a read-only <c>Value</c> property, a private constructor, <c>From</c> and
-/// <c>TryFrom</c> factories, the conversion operators, equality members, the serializer attributes, and a
-/// LiteDB mapping registration.
+/// <c>TryFrom</c> factories, the conversion operators, equality members, and serializer wiring.
+/// System.Text.Json support is always generated; Newtonsoft.Json and LiteDB support are generated only
+/// when the consuming project references those packages, so the Primify package itself has no serializer
+/// dependencies.
 /// </para>
 /// <para>
 /// The hand-written part may optionally declare two private static hooks. They run in this order for

@@ -49,4 +49,13 @@ internal static class Diagnostics
         category: "TypeValidation",
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor NoLiteDbBridge = new(
+        id: "PRIT007",
+        title: "No Built-In LiteDB Bridge",
+        messageFormat: "LiteDB is referenced but Primify wrapper '{0}' wraps '{1}', which has no built-in LiteDB mapping; " +
+            "register it manually with BsonMapper.RegisterType or after LiteDbRegistration.Register",
+        category: "Serialization",
+        defaultSeverity: DiagnosticSeverity.Warning,
+        isEnabledByDefault: true);
 }

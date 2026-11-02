@@ -8,11 +8,8 @@
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
-    <ItemGroup>
-        <PackageReference Include="LiteDB" Version="5.0.21"/>
-        <PackageReference Include="Newtonsoft.Json" Version="13.0.4"/>
-        <PackageReference Include="Newtonsoft.Json.Bson" Version="1.0.3"/>
-    </ItemGroup>
+    <!-- No package dependencies: the generator emits LiteDB/Newtonsoft.Json adapter code into the
+         consumer only when those packages are referenced there. System.Text.Json ships in the framework. -->
 
     <ItemGroup>
         <!-- Agent-facing skill travels with the package; tools can read it from the extracted package folder. -->

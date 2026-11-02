@@ -7,13 +7,30 @@ using Primify.Generator.Tests.Types;
 public class LiteDbRegistrationTests
 {
     [Test]
+    public async Task Register_AddsBuiltInMappings_OnCustomMapper()
+    {
+        var mapper = new BsonMapper();
+
+        LiteDbRegistration.Register(mapper);
+
+        var serialized = mapper.Serialize(IntRecordStruct.From(-42));
+        await Assert.That(serialized.AsInt32).IsEqualTo(-42);
+
+        var actual = mapper.Deserialize<IntRecordStruct>(serialized);
+        await Assert.That(actual).IsEqualTo(IntRecordStruct.From(-42));
+    }
+
+    [Test]
     public async Task UnsupportedWrapper_IsSkipped()
     {
         var mapper = new BsonMapper();
 
-        var registered = LiteDbMapping.TryRegister<UnsupportedLiteDbWrapper, UnsupportedLiteDbValue>(mapper);
+        LiteDbRegistration.Register(mapper);
 
-        await Assert.That(registered).IsFalse();
+        // No Primify mapping was registered for the unsupported wrapper, so LiteDB falls back to its
+        // default POCO shape instead of a primitive bridge.
+        var serialized = mapper.Serialize(UnsupportedLiteDbWrapper.From(new UnsupportedLiteDbValue("value")));
+        await Assert.That(serialized.IsDocument).IsTrue();
     }
 
     [Test]

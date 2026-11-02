@@ -184,7 +184,7 @@ public class LiteDbRoundtripTests
     {
         var value = new DateTimeOffset(2026, 8, 25, 13, 45, 59, TimeSpan.FromHours(5.5));
         var mapper = new BsonMapper();
-        LiteDbMapping.Register<DateTimeOffsetValue, DateTimeOffset>(mapper);
+        LiteDbRegistration.Register(mapper);
 
         var document = mapper.Serialize<DateTimeOffsetValue>(DateTimeOffsetValue.From(value)).AsDocument;
 
@@ -195,7 +195,7 @@ public class LiteDbRoundtripTests
     private static async Task AssertMalformedDocumentRejected(Func<BsonDocument> malformed)
     {
         var mapper = new BsonMapper();
-        LiteDbMapping.Register<DateTimeOffsetValue, DateTimeOffset>(mapper);
+        LiteDbRegistration.Register(mapper);
 
         var exception = await Assert.ThrowsAsync<FormatException>(
             async () => mapper.Deserialize<DateTimeOffsetValue>(malformed()));

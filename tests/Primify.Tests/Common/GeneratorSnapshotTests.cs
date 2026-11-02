@@ -4,23 +4,38 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Primify.Attributes;
-using Primify.Converters;
 
 public class GeneratorSnapshotTests
 {
-    internal static (ImmutableArray<Diagnostic> Diagnostics, string? Generated) Generate(string code)
+    internal static List<MetadataReference> BaseReferences()
     {
         var references = new List<MetadataReference>();
         var platformAssemblies = (string?)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES");
         if (platformAssemblies is not null)
         {
-            foreach (var path in platformAssemblies.Split(System.IO.Path.PathSeparator))
+            foreach (var path in platformAssemblies.Split(Path.PathSeparator))
             {
+                // The test host's own NuGet dependencies (LiteDB, Newtonsoft.Json) appear in the trusted
+                // platform assemblies; exclude them so the default harness models a consumer that
+                // references no serializer package.
+                var name = Path.GetFileNameWithoutExtension(path);
+                if (name.StartsWith("LiteDB", StringComparison.Ordinal) ||
+                    name.StartsWith("Newtonsoft", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
                 references.Add(MetadataReference.CreateFromFile(path));
             }
         }
 
         references.Add(MetadataReference.CreateFromFile(typeof(PrimifyAttribute<>).Assembly.Location));
+        return references;
+    }
+
+    internal static (ImmutableArray<Diagnostic> Diagnostics, string? Generated) Generate(string code)
+    {
+        var references = BaseReferences();
 
         var compilation = CSharpCompilation.Create(
             "snapshot",
@@ -69,7 +84,10 @@ public class GeneratorSnapshotTests
         await Assert.That(source).Contains("[System.Diagnostics.DebuggerDisplay(\"{Value}\")]");
         await Assert.That(source).Contains("explicit operator Foo(int value)");
         await Assert.That(source).Contains("implicit operator int(Foo value)");
-        await Assert.That(source).Contains("LiteDbMapping.TryRegister<global::Snap.Foo, int>()");
+        // This harness compilation references neither LiteDB nor Newtonsoft.Json, so no adapter code may appear.
+        await Assert.That(source).DoesNotContain("LiteDB");
+        await Assert.That(source).DoesNotContain("Newtonsoft");
+        await Assert.That(source).Contains("[System.Text.Json.Serialization.JsonConverter(typeof(SystemTextJsonConverter<Foo, int>))]");
         await Assert.That(source).Contains("public static bool TryFrom(int value, out Foo result)");
         await Assert.That(source).Contains("/// Non-throwing alternative to <see cref=\"From\"/>.");
         await Assert.That(source).DoesNotContain("ToString()");

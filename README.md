@@ -10,9 +10,13 @@ models with zero runtime overhead.
 
 It includes out-of-the-box serialization support for:
 
-* **System.Text.Json**
-* **Newtonsoft.Json**
-* **LiteDB**
+* **System.Text.Json** (always, it ships in the framework)
+* **Newtonsoft.Json** (JSON + BSON, when your project references `Newtonsoft.Json` / `Newtonsoft.Json.Bson`)
+* **LiteDB** (when your project references `LiteDB`)
+
+The `Primify` package itself has **no dependencies**. The generator detects the serializer packages in your project
+at compile time and only then emits the matching adapter code into your assembly, so wrappers serialize seamlessly
+with whichever serializers you actually use.
 
 ## Why Primify?
 
@@ -36,8 +40,9 @@ values instantly.
 - **Built-in Validation & Normalization:** Declare optional private static hooks; invalid values can never enter
   through `From`, `TryFrom`, casts, or deserialization.
 - **Non-Throwing Creation:** Every wrapper gets a generated `TryFrom(value, out result)`.
-- **Out-of-the-Box Serialization:** System.Text.Json, Newtonsoft.Json (JSON + BSON), and LiteDB with built-in bridges
-  for the full modern primitive set (`DateOnly`, `TimeOnly`, `TimeSpan`, `DateTimeOffset`, `Half`, ...).
+- **Out-of-the-Box Serialization:** System.Text.Json always, plus Newtonsoft.Json (JSON + BSON) and LiteDB when your
+  project references those packages, with built-in bridges for the full modern primitive set (`DateOnly`, `TimeOnly`,
+  `TimeSpan`, `DateTimeOffset`, `Half`, ...).
 - **Sentinel Values:** Call the generated private constructor from a static property to define named states such as
   `Undefined` or `Empty`. They bypass the hooks by design.
 - **IDE Friendly:** Generated types carry `[DebuggerDisplay("{Value}")]` and compile-time diagnostics for hook
@@ -52,9 +57,15 @@ Primify is distributed as a NuGet package. The current package targets .NET 10.
 dotnet add package Primify
 ```
 
-The `Primify` package ships adapters for System.Text.Json, Newtonsoft.Json, and LiteDB, so referencing it brings
-`Newtonsoft.Json`, `Newtonsoft.Json.Bson`, and `LiteDB` along as package dependencies. Wrapped types work with all
-three serializers out of the box.
+The `Primify` package has no package dependencies. Add the serializers you use yourself:
+
+```bash
+dotnet add package LiteDB            # optional, for LiteDB persistence
+dotnet add package Newtonsoft.Json   # optional, for Json.NET support
+```
+
+When a serializer package is referenced, the generator emits its adapter into your assembly at compile time, so
+wrapped types work with it out of the box. System.Text.Json needs no package because it ships in the framework.
 
 ### Agent skill
 
@@ -124,7 +135,8 @@ public readonly partial record struct ProductNumber
 ### 2. Using Your Wrapper Types
 
 Primify generates all the necessary boilerplate: `Value` property, private constructor, `From`/`TryFrom` factories,
-conversion operators, equality members, `[DebuggerDisplay]`, serializer attributes, and LiteDB registration.
+conversion operators, equality members, `[DebuggerDisplay]`, and serializer wiring (System.Text.Json always; the
+Newtonsoft.Json attribute and the LiteDB registration only when those packages are referenced).
 
 ```csharp
 // Creating instances using the From method
@@ -330,8 +342,9 @@ rather than the primitive. Declare the property as `Wrapper?` to represent a mis
 
 ## Supported Primitive Types
 
-Primify wraps single-value types and ships built-in LiteDB mappings for the common primitives below. Values without a
-built-in LiteDB bridge are still valid wrapper types, but their persistence mapping must be registered explicitly.
+When your project references LiteDB, Primify generates built-in mappings for the common primitives below. Values without
+a built-in LiteDB bridge are still valid wrapper types (PRIT007 warns about them), but their persistence mapping must be
+registered explicitly.
 
 | Wrapped type | LiteDB storage | Notes |
 |---|---|---|
@@ -348,8 +361,7 @@ For Newtonsoft.Json, `DateTimeOffset` uses `{ "UtcTicks": ..., "OffsetTicks": ..
 `Value` field. This avoids local-time conversion and preserves the original offset. LiteDB stores the same tick pair
 in its own document. Other supported values use their normal JSON representation.
 
-Other types are not blocked — register your own mapping with
-`LiteDbMapping.Register<TWrapper, TValue>(mapper)` replacement logic or a custom
+Other types are not blocked — register your own mapping with a custom
 `BsonMapper.RegisterType<TWrapper>` call after startup. A stored document that does not match the shape a mapping
 writes raises a `FormatException` naming the wrapper, instead of failing deeper inside LiteDB.
 
@@ -357,9 +369,10 @@ writes raises a `FormatException` naming the wrapper, instead of failing deeper 
 
 ### LiteDB Custom Mapping
 
-By default, Primify generates a `[ModuleInitializer]` that calls `LiteDbMapping.TryRegister<TWrapper, TValue>()`.
-Built-in values are registered on `BsonMapper.Global`; unsupported values are skipped so assembly startup does not
-crash. Registering a mapping again replaces the previous mapping, so you can override any type at startup:
+When your project references LiteDB, Primify generates a `[ModuleInitializer]` that registers every wrapper with a
+built-in bridge on `BsonMapper.Global` through the generated `Primify.Converters.LiteDbRegistration` class. Wrappers
+without a built-in bridge are skipped (PRIT007 warns at compile time), so assembly startup does not crash. Registering
+a mapping again replaces the previous mapping, so you can override any type at startup:
 
 ```csharp
 // Replace the default mapping for a wrapper type.
@@ -367,6 +380,14 @@ BsonMapper.Global.RegisterType<UserId>(
     serialize: id => id.Value,
     deserialize: bson => UserId.From(bson.AsInt32)
 );
+```
+
+For a custom mapper instead of `BsonMapper.Global`, register all wrappers in one call:
+
+```csharp
+var mapper = new BsonMapper();
+Primify.Converters.LiteDbRegistration.Register(mapper);
+using var db = new LiteDatabase("orders.db", mapper);
 ```
 
 Wrapped types do not expose implicit conversions to/from `LiteDB.BsonValue`; pass `.Value` when an API expects the
@@ -383,18 +404,21 @@ Primify is two assemblies acting as one:
 1. **`Primify.Generators`** — an incremental Roslyn generator. At compile time it finds every `partial` type
    annotated with `[Primify<T>]`, validates the optional `Normalize`/`Validate` hook signatures, and emits a
    generated partial containing: the `Value` property, private constructor, `From`/`TryFrom`, conversion operators,
-   equality members where the kind needs them, `[DebuggerDisplay]`, JSON converter attributes, and a file-scoped
-   `[ModuleInitializer]`.
+   equality members where the kind needs them, `[DebuggerDisplay]`, and the System.Text.Json converter attribute
+   (plus the Newtonsoft.Json attribute when that package is referenced). When LiteDB is referenced, the generator also
+   emits a shared `LiteDbRegistration` source with a `[ModuleInitializer]`.
 2. **`Primify` runtime** — the small support library your code references:
 
    | Namespace | Contents |
    |---|---|
    | `Primify` | `IPrimify<TSelf, TValue>`, the one contract every generated wrapper implements |
    | `Primify.Attributes` | `PrimifyAttribute<TPrimitive>` |
-   | `Primify.Converters` | `SystemTextJsonConverter<,>`, `NewtonsoftJsonConverter<,>`, `LiteDbMapping` |
+   | `Primify.Converters` | `SystemTextJsonConverter<,>` |
 
-   The generated initializer calls `LiteDbMapping.TryRegister<TWrapper,TValue>()` at startup; re-register any type
-   afterwards to override.
+   The package has no serializer dependencies. When your project references Newtonsoft.Json, the generator emits a
+   `NewtonsoftJsonConverter<,>` into your assembly and attaches it via `[JsonConverter]`; when it references LiteDB, it
+   emits a `LiteDbRegistration` whose `[ModuleInitializer]` registers every wrapper on `BsonMapper.Global` (call
+   `LiteDbRegistration.Register(mapper)` for a custom mapper). Re-register any type afterwards to override.
 
 Nothing runs via reflection at serialization time: converters read `.Value` directly and rebuild through the
 static abstract `From`, so validation applies on deserialization exactly as at construction sites.
@@ -408,6 +432,20 @@ static TSelf Remap<TSelf, TValue>(TSelf wrapper, Func<TValue, TValue> transform)
     where TSelf : IPrimify<TSelf, TValue>
     => TSelf.From(transform(wrapper.Value));
 ```
+
+### Upgrading to 2.0
+
+Two breaking changes, both in the package's dependency footprint:
+
+- **The package no longer brings `LiteDB`, `Newtonsoft.Json`, or `Newtonsoft.Json.Bson` along.** Add the packages you
+  use with `dotnet add package ...`. Support for them is now generated into your assembly at compile time, only when
+  the package is referenced, so behavior is unchanged once the package is present.
+- **`LiteDbMapping` and `NewtonsoftJsonConverter` are gone from `Primify.Converters`.** LiteDB registration now happens
+  through the generated `Primify.Converters.LiteDbRegistration` (`Register(BsonMapper)`); Newtonsoft.Json works through
+  the generated `[JsonConverter]` attribute with no action needed. Wrappers of types without a built-in LiteDB bridge
+  now also produce a PRIT007 warning at compile time.
+
+Stored LiteDB documents and JSON payloads keep the same shapes as 1.x, so existing data remains readable.
 
 ### Upgrading from 1.11.x
 
