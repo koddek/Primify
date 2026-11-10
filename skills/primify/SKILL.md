@@ -12,7 +12,7 @@ strongly-typed wrapper members, validation, equality, conversion operators, and 
 
 The `Primify` NuGet package has no dependencies and contains:
 
-- `Primify.Generators.dll` and `Flowgen.dll` under `analyzers/dotnet/cs`.
+- `Primify.Generators.dll` under `analyzers/dotnet/cs`.
 - `IPrimify<,>` in `Primify`, the contract every generated wrapper implements.
 - `PrimifyAttribute<T>` in `Primify.Attributes`.
 - The System.Text.Json adapter `SystemTextJsonConverter<,>` in `Primify.Converters`.
@@ -72,8 +72,8 @@ Hooks must be synchronous, non-generic, private, static, and use one by-value pa
 async hooks report PRIT002 or PRIT003. Invalid hooks stop source generation.
 
 `From` rejects null reference values before `Normalize`. A reference normalizer must return a non-null value. `Validate`
-must throw an `ArgumentException`-derived exception to reject a value. `TryFrom` catches that exception family and
-returns `false`; other exceptions escape.
+must throw an `ArgumentException`-derived exception to reject a value. `TryFrom` returns `false` whenever `From` throws,
+whatever the exception type.
 
 ## Generated API
 
@@ -83,9 +83,9 @@ For a wrapper `W` around `T`:
 |---|---|
 | `T Value { get; }` | Underlying normalized value. |
 | `static W From(T value)` | Runs `Normalize`, null checking, and `Validate`. |
-| `static bool TryFrom(T value, out W result)` | Returns `false` on `ArgumentException`. Class results are null on failure. |
+| `static bool TryFrom(T value, out W result)` | Returns `false` when `From` throws, whatever the exception type. Class results are null on failure. |
 | `explicit operator W(T value)` | Same validation pipeline as `From`. |
-| `implicit operator T(W value)` | Leaves the wrapper and cannot fail. |
+| `implicit operator T(W value)` | Reads the underlying primitive; a null wrapper reference throws `ArgumentNullException`. |
 | `ToString` and equality | Record types use compiler-generated members; plain types use generated members. |
 
 Plain `class`/`struct` wrappers print the bare underlying value from `ToString`. Record wrappers keep the compiler's
@@ -105,23 +105,25 @@ property as `Wrapper?`.
 
 ### Newtonsoft.Json
 
-Generated only when the project references `Newtonsoft.Json` (the BSON branches also need `Newtonsoft.Json.Bson`): a
-`NewtonsoftJsonConverter<W, T>` emitted into the consumer assembly and attached to every wrapper via
+Generated only when the project references `Newtonsoft.Json` (the BSON branches also need `Newtonsoft.Json.Bson`): an
+internal `NewtonsoftJsonConverter<W, T>` emitted into the consumer assembly and attached to every wrapper via
 `[JsonConverter]`. Standard JSON writes the bare primitive. `DateTimeOffset` uses `{ "UtcTicks": ..., "OffsetTicks": ... }`
 because Json.NET otherwise converts ISO values to the local offset before the wrapper converter runs. BSON wraps the
 value in `{ "Value": ... }`; a `DateTimeOffset` uses the tick object inside `Value`. Malformed BSON objects are rejected.
 
 ### LiteDB
 
-Generated only when the project references `LiteDB`: a `LiteDbRegistration` class whose `[ModuleInitializer]` registers
-every wrapper with a built-in bridge on `BsonMapper.Global`; call `LiteDbRegistration.Register(mapper)` for a custom
-mapper. Values without a built-in bridge are skipped (PRIT007 warns at compile time), so they do not crash assembly
-startup. Register an unsupported wrapper explicitly with `BsonMapper.RegisterType<W>(...)` after startup.
+Generated only when the project references `LiteDB`: an internal `LiteDbRegistration` class whose `[ModuleInitializer]` registers
+every wrapper with a built-in bridge on `BsonMapper.Global`; call `LiteDbRegistration.Register(mapper)` from your own
+assembly for a custom mapper. Values without a built-in bridge are skipped (PRIT007 warns at compile time), so they do not
+crash assembly startup. Register an unsupported wrapper explicitly with `BsonMapper.RegisterType<W>(...)` after startup.
 
-Built-in storage mappings include native BSON values, checked integer conversions, `DateTime` UTC values, `TimeSpan`
-and `TimeOnly` ticks, `DateOnly` UTC midnight, and a `{ UtcTicks, OffsetTicks }` document for `DateTimeOffset`, which
-keeps both the instant and the offset exact to the tick. A stored document that does not match the shape a mapping
-writes raises a `FormatException` naming the wrapper.
+Built-in storage mappings include native BSON values, checked integer conversions, `DateTime` stored as a UTC instant
+(`Unspecified` is treated as UTC, `Local` is converted), `TimeSpan` and `TimeOnly` ticks, `DateOnly` UTC midnight, and a
+`{ UtcTicks, OffsetTicks }` document for `DateTimeOffset`, which keeps both the instant and the offset exact to the tick.
+A wrapper around `Nullable<T>` of a supported type stores a `{ "Value": bson }` document whose `Value` is BSON null when
+unset. A stored document that does not match the shape a mapping writes raises a `FormatException` naming the wrapper —
+unexpected BSON type, out-of-range number, or a malformed `DateTimeOffset` document — never a raw LiteDB failure.
 
 ## Diagnostics
 

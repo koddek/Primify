@@ -44,8 +44,13 @@ public sealed class SystemTextJsonConverter<TWrapper, TValue> : JsonConverter<TW
         }
 
         var innerValue = JsonSerializer.Deserialize<TValue>(ref reader, options);
+        if (innerValue is null)
+        {
+            throw new JsonException(
+                $"Cannot read the JSON payload as {typeof(TWrapper)}: the payload does not contain a {typeof(TValue).Name} value.");
+        }
 
-        return TWrapper.From(innerValue!);
+        return TWrapper.From(innerValue);
     }
 
     /// <summary>

@@ -28,7 +28,7 @@ internal record PrimifyModel(
     string Namespace,
     string ClassName,
     string Keyword, // class, struct, record class, record struct
-    string WrappedType, // int, string, Guid, ...
+    string? WrappedType, // int, string, Guid, ...; null when the wrapped type could not be resolved
     bool WrappedTypeIsReferenceType,
     bool IsValueType,
     bool IsRecord,
@@ -43,6 +43,8 @@ internal record PrimifyModel(
     EquatableArray<ContainingTypeModel> ContainingTypes,
     bool LiteDbAvailable,
     LiteDbStorageKind LiteDbStorage,
+    bool WrapsNullableValueType,
+    string UnderlyingWrappedType,
     bool NewtonsoftAvailable,
     bool NewtonsoftBsonAvailable
 )
@@ -69,7 +71,7 @@ internal record PrimifyModel(
 
     /// <summary>True when the wrapper itself is generated, i.e. no blocking diagnostic was reported.</summary>
     public bool IsGeneratable =>
-        WrappedType != "object" &&
+        WrappedType is not null &&
         UnsupportedDeclarationReason is null &&
         ReservedMemberConflict is null &&
         !InvalidNormalizeSignature &&

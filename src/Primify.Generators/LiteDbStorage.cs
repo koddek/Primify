@@ -69,6 +69,13 @@ internal static class LiteDbStorage
 {
     public static LiteDbStorageKind Classify(ITypeSymbol? wrappedType)
     {
+        if (wrappedType is INamedTypeSymbol named &&
+            named.IsValueType &&
+            named.ConstructedFrom.SpecialType == SpecialType.System_Nullable_T)
+        {
+            return Classify(named.TypeArguments[0]);
+        }
+
         switch (wrappedType?.SpecialType)
         {
             case SpecialType.System_String:

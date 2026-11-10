@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
@@ -25,14 +25,8 @@
                           OutputItemType="Analyzer"
                           ReferenceOutputAssembly="false"/>
 
-        <Analyzer Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\Flowgen.dll" />
-
         <!-- Pack only required analyzer binaries to avoid shipping Roslyn runtime assemblies -->
         <None Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\Primify.Generators.dll"
-              Pack="true"
-              PackagePath="analyzers/dotnet/cs"
-              Visible="false"/>
-        <None Include="..\Primify.Generators\bin\$(Configuration)\netstandard2.0\Flowgen.dll"
               Pack="true"
               PackagePath="analyzers/dotnet/cs"
               Visible="false"/>

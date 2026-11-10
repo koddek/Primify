@@ -38,9 +38,9 @@ reported by the compiler, not by Primify.
 |---|---|
 | `TPrimitive Value { get; }` | Returns the normalized value. |
 | `static W From(TPrimitive value)` | Applies `Normalize`, checks for a null result, applies `Validate`, and constructs the wrapper. |
-| `static bool TryFrom(TPrimitive value, out W result)` | Returns `false` when an `ArgumentException` is thrown. Value wrappers return `default`; class wrappers return `null` and use `MaybeNullWhen(false)`. |
+| `static bool TryFrom(TPrimitive value, out W result)` | Returns `false` when `From` throws, whatever the exception type. Value wrappers return `default`; class wrappers return `null` and use `MaybeNullWhen(false)`. |
 | `explicit operator W(TPrimitive value)` | Runs the same pipeline as `From`. |
-| `implicit operator TPrimitive(W value)` | Returns `Value` and cannot fail. |
+| `implicit operator TPrimitive(W value)` | Returns `Value`; a null wrapper reference is rejected with `ArgumentNullException`. |
 
 `From` rejects null reference values before calling `Normalize`. `Normalize` must return a non-null reference value.
 
@@ -63,7 +63,7 @@ public partial record class UserName
 ```
 
 `Normalize` runs before `Validate`. `Validate` must throw an `ArgumentException`-derived exception to reject a value.
-Other exceptions escape `TryFrom`.
+`TryFrom` returns `false` whenever `From` throws, whatever the exception type.
 
 ## Diagnostics
 
@@ -88,24 +88,25 @@ representation and throws a `JsonException` naming the wrapper; declare the prop
 ### Newtonsoft.Json
 
 Emitted only when the consumer references `Newtonsoft.Json` (plus `Newtonsoft.Json.Bson` for the BSON branches): a
-generated `NewtonsoftJsonConverter<TWrapper, TValue>` in `Primify.Converters`, attached to every wrapper via
+generated internal `NewtonsoftJsonConverter<TWrapper, TValue>` in `Primify.Converters`, attached to every wrapper via
 `[JsonConverter]`. Standard JSON writes the underlying primitive. `DateTimeOffset` is represented as an object with
 `UtcTicks` and `OffsetTicks` so its original offset survives Json.NET date tokenization. BSON wraps values in
 `{ "Value": ... }`; a `DateTimeOffset` value uses the same tick object inside `Value`. Malformed objects are rejected.
 
 ### LiteDB
 
-Emitted only when the consumer references `LiteDB`: one shared source per assembly with a `LiteDbRegistration` class.
+Emitted only when the consumer references `LiteDB`: one shared source per assembly with an internal `LiteDbRegistration` class.
 Its `[ModuleInitializer]` registers every wrapper with a built-in bridge on `BsonMapper.Global`; call
 `LiteDbRegistration.Register(mapper)` for a custom mapper. Values without a built-in bridge are skipped (PRIT007 warns
 at compile time) rather than failing assembly startup. Register those values explicitly with
 `BsonMapper.RegisterType<TWrapper>(...)` when a custom bridge is available.
 
-A stored document that does not match the shape a mapping writes raises a `FormatException` naming the wrapper.
-
 Supported built-in values include strings, booleans, signed and unsigned integers, `Guid`, `DateTime`, `DateTimeOffset`,
-`TimeSpan`, `TimeOnly`, `DateOnly`, `decimal`, `float`, and `Half`. LiteDB stores time values according to the mappings
-documented in the README.
+`TimeSpan`, `TimeOnly`, `DateOnly`, `decimal`, `float`, and `Half`, plus `Nullable<T>` of those (stored as a
+`{ "Value": bson }` document; `Value` is BSON null when the wrapper holds no value). A stored document that does not
+match the shape a mapping writes raises a `FormatException` naming the wrapper, whatever the failure mode: unexpected
+BSON type, out-of-range numeric, or malformed `DateTimeOffset` document. An `Unspecified`-kind `DateTime` is treated as
+UTC on write; a `Local` DateTime is converted. LiteDB stores time values according to the mappings documented in the README.
 
 ## Equality
 

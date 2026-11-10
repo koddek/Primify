@@ -65,7 +65,7 @@ internal static class PrimifyRenderer
     private static string RenderWrapper(PrimifyModel model)
     {
         var name = model.ClassName;
-        var type = model.WrappedType;
+        var type = model.WrappedType!;
         var modifier = model.IsValueType ? "readonly " : string.Empty;
 
         var sb = new StringBuilder();
@@ -112,7 +112,7 @@ internal static class PrimifyRenderer
     private static void AppendFrom(StringBuilder sb, PrimifyModel model)
     {
         var name = model.ClassName;
-        var type = model.WrappedType;
+        var type = model.WrappedType!;
 
         sb.AppendLine("    /// <summary>");
         sb.AppendLine("    /// Creates a validated instance by running the declaring type's Normalize hook");
@@ -158,12 +158,11 @@ internal static class PrimifyRenderer
     private static void AppendTryFrom(StringBuilder sb, PrimifyModel model)
     {
         var name = model.ClassName;
-        var type = model.WrappedType;
+        var type = model.WrappedType!;
 
         sb.AppendLine("    /// <summary>");
         sb.AppendLine("    /// Non-throwing alternative to <see cref=\"From\"/>. Applies the same Normalize and");
-        sb.AppendLine("    /// Validate hooks; returns false when validation throws an ArgumentException-derived");
-        sb.AppendLine("    /// exception.");
+        sb.AppendLine("    /// Validate hooks; returns false when <see cref=\"From\"/> throws, whatever the exception type.");
         sb.AppendLine("    /// </summary>");
         sb.AppendLine("    /// <param name=\"value\">The primitive value to wrap.</param>");
         sb.AppendLine(model.IsValueType
@@ -180,7 +179,7 @@ internal static class PrimifyRenderer
         sb.AppendLine("            result = From(value);");
         sb.AppendLine("            return true;");
         sb.AppendLine("        }");
-        sb.AppendLine("        catch (ArgumentException)");
+        sb.AppendLine("        catch (Exception)");
         sb.AppendLine("        {");
         sb.AppendLine("            result = default!;");
         sb.AppendLine("            return false;");
@@ -191,15 +190,24 @@ internal static class PrimifyRenderer
     private static void AppendPrimitiveConversions(StringBuilder sb, PrimifyModel model)
     {
         var name = model.ClassName;
-        var type = model.WrappedType;
+        var type = model.WrappedType!;
 
         // primitive -> wrapper runs normalization/validation and can throw; it must be explicit.
         sb.AppendLine("    /// <summary>Wraps the primitive through the same normalize/validate pipeline as <see cref=\"From\"/>.</summary>");
         sb.AppendLine("    /// <param name=\"value\">The primitive value to wrap.</param>");
         sb.AppendLine($"    public static explicit operator {name}({type} value) => From(value);");
         sb.AppendLine("    /// <summary>Returns the underlying primitive value.</summary>");
-        sb.AppendLine("    /// <param name=\"value\">The wrapper instance.</param>");
-        sb.AppendLine($"    public static implicit operator {type}({name} value) => value.Value;");
+        sb.AppendLine("    /// <exception cref=\"ArgumentNullException\">The wrapper reference is null.</exception>");
+        if (model.IsValueType)
+        {
+            sb.AppendLine("    /// <param name=\"value\">The wrapper instance.</param>");
+            sb.AppendLine($"    public static implicit operator {type}({name} value) => value.Value;");
+        }
+        else
+        {
+            sb.AppendLine("    /// <param name=\"value\">The wrapper instance.</param>");
+            sb.AppendLine($"    public static implicit operator {type}({name}? value) => value is null ? throw new ArgumentNullException(nameof(value)) : value.Value;");
+        }
     }
 
     private static string RenderContainingTypes(PrimifyModel model, string wrapper)
@@ -238,7 +246,7 @@ internal static class PrimifyRenderer
         }
 
         var name = model.ClassName;
-        var (equalsExpr, hashCodeExpr) = GetEqualityExpressions(model.EqualityStrategy, model.WrappedType);
+        var (equalsExpr, hashCodeExpr) = GetEqualityExpressions(model.EqualityStrategy, model.WrappedType!);
 
         if (model.IsValueType)
         {

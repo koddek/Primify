@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using Flowgen;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -29,33 +28,27 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
         ["ToString", "Equals", "GetHashCode", "op_Equality", "op_Inequality"];
 
     /// <summary>
-    /// Registers the incremental pipeline: every attributed type declaration is modeled once, filtered
-    /// down to Primify wrappers, and rendered into one generated file per wrapper.
+    /// Registers the incremental pipeline. Every attributed type declaration is modeled once; the modeled
+    /// list is collected once for the shared serializer adapters and emitted per wrapper otherwise. Building
+    /// the model a single time keeps the semantic analysis (attribute lookup, member scans) cheap on every
+    /// re-keystroke.
     /// </summary>
     /// <param name="context">The Roslyn initialization context the pipeline is attached to.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        Flow.Create()
-            .ForSyntax(static (node, _) => node is TypeDeclarationSyntax declaration && declaration.AttributeLists.Count > 0)
-            .Select(static (context, _) => BuildModel(context))
-            .Where(static model => model is not null)
-            .Select(static model => model!)
-            .Emit(static (spc, model) => GenerateCode(spc, model))
-            .Build()
-            .Initialize(context);
-
-        // Serializer adapter emission: one shared source per consumer compilation, emitted only when the
-        // consumer references the matching serializer package (LiteDB, Newtonsoft.Json, Newtonsoft.Json.Bson).
-        var adapterModels = context.SyntaxProvider
+        var models = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is TypeDeclarationSyntax declaration && declaration.AttributeLists.Count > 0,
                 static (syntaxContext, _) => BuildModel(syntaxContext))
             .Where(static model => model is not null)
-            .Select(static (model, _) => (PrimifyModel)model!)
-            .Collect();
+            .Select(static (model, _) => (PrimifyModel)model!);
 
+        context.RegisterSourceOutput(models, static (spc, model) => GenerateCode(spc, model));
+
+        // Serializer adapter emission: one shared source per consumer compilation, emitted only when the
+        // consumer references the matching serializer package (LiteDB, Newtonsoft.Json, Newtonsoft.Json.Bson).
         context.RegisterSourceOutput(
-            adapterModels.Combine(context.CompilationProvider),
+            models.Collect().Combine(context.CompilationProvider),
             static (spc, pair) => GenerateAdapters(spc, pair.Left, pair.Right));
     }
 
@@ -79,7 +72,13 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
         }
 
         var wrappedTypeSymbol = attr.AttributeClass?.TypeArguments.FirstOrDefault();
-        var wrappedType = wrappedTypeSymbol?.ToDisplayString() ?? "object";
+        var wrappedType = wrappedTypeSymbol?.ToDisplayString();
+        var wrapsNullableValueType = wrappedTypeSymbol is INamedTypeSymbol nullableSymbol &&
+            nullableSymbol.IsValueType &&
+            nullableSymbol.ConstructedFrom.SpecialType == SpecialType.System_Nullable_T;
+        var underlyingWrappedType = wrapsNullableValueType
+            ? ((INamedTypeSymbol)wrappedTypeSymbol!).TypeArguments[0].ToDisplayString()
+            : wrappedType ?? string.Empty;
         var containingTypes = GetContainingTypes(node);
 
         var keyword = node switch
@@ -125,6 +124,8 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
             ContainingTypes: containingTypes,
             LiteDbAvailable: compilation.GetTypeByMetadataName("LiteDB.BsonMapper") is not null,
             LiteDbStorage: LiteDbStorage.Classify(wrappedTypeSymbol),
+            WrapsNullableValueType: wrapsNullableValueType,
+            UnderlyingWrappedType: underlyingWrappedType,
             NewtonsoftAvailable: compilation.GetTypeByMetadataName("Newtonsoft.Json.JsonConverter") is not null,
             NewtonsoftBsonAvailable: compilation.GetTypeByMetadataName("Newtonsoft.Json.Bson.BsonDataWriter") is not null
         );
@@ -134,7 +135,7 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
     {
         var location = model.Location.ToLocation();
 
-        if (model.WrappedType == "object")
+        if (model.WrappedType is null)
         {
             context.ReportDiagnostic(Diagnostic.Create(
                 Diagnostics.InvalidType,
@@ -255,7 +256,7 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
                 constructor.Parameters.Length == 1 &&
                 SymbolEqualityComparer.Default.Equals(constructor.Parameters[0].Type, wrappedType)))
         {
-            return "a constructor";
+            return $"a constructor with a single parameter of type '{wrappedType.ToDisplayString()}'";
         }
 
         foreach (var memberName in CommonReservedMembers)

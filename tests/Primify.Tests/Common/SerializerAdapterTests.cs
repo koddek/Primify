@@ -92,8 +92,9 @@ public class SerializerAdapterTests
         var all = AllSources(sources);
         await Assert.That(all).Contains("global::LiteDB.BsonMapper.Global");
         await Assert.That(all).Contains("mapper.RegisterType<global::Snap.Foo>(");
-        await Assert.That(all).Contains("serialize: wrapper => new global::LiteDB.BsonValue(wrapper.Value)");
-        await Assert.That(all).Contains("deserialize: bson => global::Snap.Foo.From(bson.AsInt32)");
+        await Assert.That(all).Contains("serialize: wrapper => new global::LiteDB.BsonValue((int)wrapper.Value)");
+        await Assert.That(all).Contains("deserialize: bson => global::Snap.Foo.From(Parse0(bson)));");
+        await Assert.That(all).Contains("private static int Parse0(global::LiteDB.BsonValue bson)");
     }
 
     [Test]

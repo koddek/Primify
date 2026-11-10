@@ -309,10 +309,9 @@ else
 var undefined = ProductNumber.Undefined; // No exception thrown
 ```
 
-`TryFrom` returns `false` when `Validate` throws an `ArgumentException`-derived exception
-(`ArgumentNullException`, `ArgumentOutOfRangeException`, ...). Value-type wrappers return their default value on failure;
-class wrappers return `null` and advertise that with `MaybeNullWhen(false)`. Prefer throwing exceptions from `Validate`
-so both `From` and `TryFrom` behave consistently.
+`TryFrom` returns `false` whenever `From` throws, whatever the exception type. Value-type wrappers return their default value on failure;
+class wrappers return `null` and advertise that with `MaybeNullWhen(false)`. Prefer throwing `ArgumentException`-derived
+exceptions from `Validate` so both `From` and `TryFrom` behave consistently.
 
 ### 5. Working with Nullable Values
 
@@ -352,10 +351,11 @@ registered explicitly.
 | `byte`, `sbyte`, `short`, `ushort`, `char` | Int32 | checked cast on read |
 | `uint`, `ulong` | Int64 | follows LiteDB conventions; values beyond `long` range throw `OverflowException` |
 | `float`, `Half` | Double | widened; `Half` is exact for representable values |
-| `DateTime` | DateTime | normalized to UTC instants (LiteDB stores millisecond precision) |
+| `DateTime` | DateTime | stored as a UTC instant (millisecond precision); `Unspecified` is treated as UTC, `Local` is converted |
 | `TimeSpan`, `TimeOnly` | Int64 ticks | lossless |
 | `DateOnly` | DateTime | stored as UTC midnight so the date survives any machine timezone |
 | `DateTimeOffset` | Document `{UtcTicks, OffsetTicks}` | instant and offset both exact to the tick |
+| `Nullable<T>` of the above | Document `{Value}` | `Value` is BSON `Null` when unset; never a bare `Null` |
 
 For Newtonsoft.Json, `DateTimeOffset` uses `{ "UtcTicks": ..., "OffsetTicks": ... }` in standard JSON and inside the BSON
 `Value` field. This avoids local-time conversion and preserves the original offset. LiteDB stores the same tick pair
@@ -369,8 +369,9 @@ writes raises a `FormatException` naming the wrapper, instead of failing deeper 
 
 ### LiteDB Custom Mapping
 
-When your project references LiteDB, Primify generates a `[ModuleInitializer]` that registers every wrapper with a
-built-in bridge on `BsonMapper.Global` through the generated `Primify.Converters.LiteDbRegistration` class. Wrappers
+When your project references LiteDB, Primify generates an internal `[ModuleInitializer]` that registers every wrapper with a
+built-in bridge on `BsonMapper.Global` through the generated `Primify.Converters.LiteDbRegistration` class (internal, so
+multiple wrapper libraries never clash downstream). Wrappers
 without a built-in bridge are skipped (PRIT007 warns at compile time), so assembly startup does not crash. Registering
 a mapping again replaces the previous mapping, so you can override any type at startup:
 
@@ -417,8 +418,8 @@ Primify is two assemblies acting as one:
 
    The package has no serializer dependencies. When your project references Newtonsoft.Json, the generator emits a
    `NewtonsoftJsonConverter<,>` into your assembly and attaches it via `[JsonConverter]`; when it references LiteDB, it
-   emits a `LiteDbRegistration` whose `[ModuleInitializer]` registers every wrapper on `BsonMapper.Global` (call
-   `LiteDbRegistration.Register(mapper)` for a custom mapper). Re-register any type afterwards to override.
+   emits an internal `LiteDbRegistration` whose `[ModuleInitializer]` registers every wrapper on `BsonMapper.Global`
+   (call `LiteDbRegistration.Register(mapper)` from your own assembly for a custom mapper). Re-register any type afterwards to override.
 
 Nothing runs via reflection at serialization time: converters read `.Value` directly and rebuild through the
 static abstract `From`, so validation applies on deserialization exactly as at construction sites.
@@ -465,9 +466,10 @@ Two changes affect existing code:
 `Validate` sees. Trim/case/lowercase/clamp in `Normalize`; enforce business rules (ranges, lengths, formats) in
 `Validate`.
 
-**Throw `ArgumentException`-derived exceptions from `Validate`.** The generated `TryFrom` catches
-`ArgumentException` (and subclasses such as `ArgumentNullException`/`ArgumentOutOfRangeException`) to return `false`.
-Throwing anything else escapes `TryFrom` and breaks that contract.
+**Throw `ArgumentException`-derived exceptions from `Validate`.** The generated `TryFrom` returns `false` whenever
+`From` throws, so unconventional hook exceptions are swallowed without bubbling up as defects. Throwing
+`ArgumentException` keeps the semantics clear to humans reading the code and keeps behavior consistent across
+`From` and `TryFrom`.
 
 **Prefer wrappers with validation for domain concepts; keep bare wrappers for opaque IDs.** `[Primify<Guid>]` with no
 hooks is perfect for identifiers; add hooks only when rules exist.
@@ -475,9 +477,10 @@ hooks is perfect for identifiers; add hooks only when rules exist.
 **Use `From` for trusted construction sites and `TryFrom` at system boundaries.** Parsing user input, reading config,
 or handling external payloads: use `TryFrom` and surface your own error. Internal code paths can assume `From`.
 
-**Remember implicit conversions only leave the wrapper.** `string s = wrapper;` works implicitly because it cannot
-fail. Entering a wrapper always requires `From`, `TryFrom`, or an explicit cast — invalid data fails loudly instead of
-silently flowing through an assignment.
+**Remember implicit conversions only leave the wrapper.** `string s = wrapper;` works implicitly because it does not
+go through validation. A null wrapper reference throws `ArgumentNullException` rather than a bare
+`NullReferenceException`. Entering a wrapper always requires `From`, `TryFrom`, or an explicit cast — invalid data
+fails loudly instead of silently flowing through an assignment.
 
 **Predefined values (`Undefined`, `Default`) bypass validation by design.** They call the private constructor
 directly, so they are safe places for sentinel states — but never construct invalid instances there casually.

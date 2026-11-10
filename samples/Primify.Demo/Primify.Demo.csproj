@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
@@ -20,7 +20,6 @@
       <ProjectReference Include="..\..\src\Primify.Generators\Primify.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
       <ProjectReference Include="..\..\src\Primify\Primify.csproj"/>
 
-      <Analyzer Include="..\..\src\Primify.Generators\bin\$(Configuration)\netstandard2.0\Flowgen.dll" />
     </ItemGroup>
 
 </Project>
