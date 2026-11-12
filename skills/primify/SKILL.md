@@ -5,18 +5,22 @@ description: Use when creating or consuming Primify wrapper types, adding [Primi
 
 # Primify
 
-Primify is a .NET 10 incremental source generator. It completes `[Primify<T>]` annotated partial types with
+Primify is a .NET 10 and .NET 11 incremental source generator. It completes `[Primify<T>]` annotated partial types with
 strongly-typed wrapper members, validation, equality, conversion operators, and serializer adapters.
 
 ## Package layout
 
 The `Primify` NuGet package has no dependencies and contains:
 
-- `Primify.Generators.dll` under `analyzers/dotnet/cs`.
+- `Primify.Generators.dll` under `analyzers/dotnet/cs` (netstandard2.0, so any consumer SDK can load it).
 - `IPrimify<,>` in `Primify`, the contract every generated wrapper implements.
 - `PrimifyAttribute<T>` in `Primify.Attributes`.
 - The System.Text.Json adapter `SystemTextJsonConverter<,>` in `Primify.Converters`.
 - This skill at `skills/primify/SKILL.md`.
+
+The package ships `lib/net10.0` (LTS) and `lib/net11.0` assets and is `IsAotCompatible` and `IsTrimmable`. The
+runtime's System.Text.Json adapter is trimming- and Native AOT-safe; see the System.Text.Json section for the one
+registration step a source-gen consumer needs.
 
 Newtonsoft.Json and LiteDB adapters are not in the package. When the consuming project references those packages, the
 generator emits the adapters into the consumer assembly at compile time, so support appears automatically.
@@ -103,6 +107,21 @@ System.Text.Json resolves JSON `null` before the converter runs, so a reference-
 value-type wrapper throws a `JsonException` naming the wrapper, because it cannot represent a missing value; declare the
 property as `Wrapper?`.
 
+This applies to the reflection-based serializer (default options). The System.Text.Json source generator cannot see
+attributes from another source generator, so under a `JsonSerializerContext` (required for Native AOT) the wrapper's
+`[JsonConverter]` is inert and the wrapper serializes as `{}`, then deserializes as `default`, silently. For source-gen,
+register the converter on the context:
+
+```csharp
+using System.Text.Json.Serialization;
+using Primify.Converters;
+
+[JsonSourceGenerationOptions(Converters = [typeof(SystemTextJsonConverter<UserName, string>)])]
+[JsonSerializable(typeof(MyModel))]
+[JsonSerializable(typeof(UserName))]
+partial class AppContext : JsonSerializerContext;
+```
+
 ### Newtonsoft.Json
 
 Generated only when the project references `Newtonsoft.Json` (the BSON branches also need `Newtonsoft.Json.Bson`): an
@@ -142,6 +161,10 @@ unexpected BSON type, out-of-range number, or a malformed `DateTimeOffset` docum
 After changing a wrapper, build the consumer and run its tests. Cover `From`, validation failure, `TryFrom` failure,
 the serializer used by the consumer, equality or hash use when stored in collections, and any custom LiteDB mapping.
 For generator changes, run the full test executable and include compile-backed cases for generated source.
+
+If the consumer uses a `JsonSerializerContext` (mandatory for Native AOT), verify a wrapper round trip through that
+context. The reflection serializer path passing proves nothing about the source-gen path — without `Converters = ...`
+on the context the wrapper round-trips as `{}` and `default` silently.
 
 For a `DateTimeOffset` wrapper, test with a sub-millisecond value. The LiteDB bridge is tick-based, so a value that
 would have been truncated by a BSON `DateTime` must still compare equal after a round trip.

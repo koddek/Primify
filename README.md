@@ -46,12 +46,12 @@ values instantly.
 - **Sentinel Values:** Call the generated private constructor from a static property to define named states such as
   `Undefined` or `Empty`. They bypass the hooks by design.
 - **IDE Friendly:** Generated types carry `[DebuggerDisplay("{Value}")]` and compile-time diagnostics for hook
-  signature mistakes.
+  signature mistakes, each linking back to the diagnostics reference.
 - **High Performance:** Designed for minimal overhead, with benchmarks to prove it.
 
 ## Installation
 
-Primify is distributed as a NuGet package. The current package targets .NET 10.
+Primify is distributed as a NuGet package. The current package multi-targets .NET 10 (LTS) and .NET 11.
 
 ```bash
 dotnet add package Primify
@@ -206,7 +206,7 @@ converters automatically.
 ```csharp
 // Serialization
 var data = new { 
-    Product = ProductName.From("Premium Widget"),
+    Product = ProductName.From("Premium Widget"), 
     Number = ProductNumber.From(42) 
 };
 
@@ -216,6 +216,27 @@ string json = JsonSerializer.Serialize(data);
 // Deserialization
 var deserialized = JsonSerializer.Deserialize<YourType>(json);
 ```
+
+**System.Text.Json source generation (required for Native AOT).** The `[JsonConverter]` attribute on a generated
+wrapper is visible to the reflection-based serializer, but the System.Text.Json source generator cannot see attributes
+attached by another source generator, so a `JsonSerializerContext` alone produces an empty contract for the wrapper.
+When you use a `JsonSerializerContext` — mandatory for Native AOT — register the wrapper converters explicitly:
+
+```csharp
+using System.Text.Json.Serialization;
+using Primify.Converters;
+
+[JsonSourceGenerationOptions(Converters = [
+    typeof(SystemTextJsonConverter<ProductName, string>),
+    typeof(SystemTextJsonConverter<ProductNumber, int>)])]
+[JsonSerializable(typeof(Product))]
+[JsonSerializable(typeof(ProductName))]
+[JsonSerializable(typeof(ProductNumber))]
+partial class AppContext : JsonSerializerContext;
+```
+
+Without `Converters = ...`, Native AOT round-trips a wrapper as `{}` and reads it back as `default`, silently. The
+reflection-based serializer (default options) is unaffected.
 
 #### Newtonsoft.Json
 
@@ -494,12 +515,11 @@ primitive obsession.
 ## Benchmarks
 ```csharp
 // * Summary *
-BenchmarkDotNet v0.15.8, macOS 26.1 (25B78) [Darwin 25.1.0]
+BenchmarkDotNet v0.16.0-preview.2, macOS Tahoe 26.6.2 (25G83) [Darwin 25.6.0]
 Apple M1, 1 CPU, 8 logical and 8 physical cores
-.NET SDK 10.0.401
-[Host]    : .NET 10.0.0 (10.0.0, 10.0.25.52411), Arm64 RyuJIT armv8.0-a
-.NET 10.0 : .NET 10.0.0 (10.0.0, 10.0.25.52411), Arm64 RyuJIT armv8.0-a
-Job=.NET 10.0  Runtime=.NET 10.0
+.NET SDK 11.0.100
+[Host]     : .NET 11.0.0 (11.0.0, 11.0.26.53018), Arm64 RyuJIT armv8.0-a
+Runtime=.NET 11.0
 
 // 1. Simple Wrapper (Zero logic)
 [Primify<string>]
@@ -527,14 +547,19 @@ public readonly partial record struct SmartUser
 }
 ```
 
-| Method                | Mean       | Ratio | Gen0   | Allocated | Alloc Ratio |
-|---------------------- |-----------:|------:|-------:|----------:|------------:|
-| 'Manual String Logic' | 24.5890 ns | 1.000 | 0.0127 |      80 B |        1.00 |
-| SmartUser.From()      | 21.5932 ns | 0.878 | 0.0127 |      80 B |        1.00 |
-| SimpleUser.From()     |  0.0000 ns | 0.000 |      - |         - |        0.00 |
-| 'String == String'    |  0.0000 ns | 0.000 |      - |         - |        0.00 |
-| 'Simple == Simple'    |  0.1039 ns | 0.004 |      - |         - |        0.00 |
-| 'Smart == Smart'      |  1.7500 ns | 0.071 |      - |         - |        0.00 |
+| Method                      | Mean        | Ratio | Gen0   | Allocated | Alloc Ratio |
+|---------------------------- |------------:|------:|-------:|----------:|------------:|
+| 'Manual String Logic'       |  23.6380 ns |  1.00 | 0.0127 |      80 B |        1.00 |
+| SmartUser.From()            |  26.4632 ns |  1.12 | 0.0127 |      80 B |        1.00 |
+| SimpleUser.From()           |   0.7611 ns |  0.03 |      - |         - |        0.00 |
+| 'String == String'          |   0.7504 ns |  0.03 |      - |         - |        0.00 |
+| 'Simple == Simple'          |   0.7349 ns |  0.03 |      - |         - |        0.00 |
+| 'Smart == Smart'            |   2.2556 ns |  0.10 |      - |         - |        0.00 |
+| 'String GetHashCode'        |   4.6844 ns |  0.20 |      - |         - |        0.00 |
+| Simple.GetHashCode()        |   4.7164 ns |  0.20 |      - |         - |        0.00 |
+| Smart.GetHashCode()         |   4.7263 ns |  0.20 |      - |         - |        0.00 |
+| 'STJ Serialize SmartUser'   |  78.1597 ns |  3.31 | 0.0063 |      40 B |        0.50 |
+| 'STJ Deserialize SmartUser' | 138.7136 ns |  5.87 | 0.0062 |      40 B |        0.50 |
 
 
 ## Contributing

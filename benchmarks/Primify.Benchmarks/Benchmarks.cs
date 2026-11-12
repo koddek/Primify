@@ -1,8 +1,9 @@
 using BenchmarkDotNet.Jobs;
+using System.Text.Json;
 
 namespace Primify.Benchmarks;
 
-[SimpleJob(RuntimeMoniker.Net10_0)]
+[SimpleJob(RuntimeMoniker.Net11_0)]
 [MemoryDiagnoser]
 [HideColumns("Error", "StdDev", "Median", "RatioSD")]
 public class UsernameBenchmarks
@@ -88,5 +89,43 @@ public class UsernameBenchmarks
     public bool Equals_Smart()
     {
         return _smart1 == _smart2;
+    }
+
+    // ----------------------------------------------------
+    // 3. HASH CODE (dictionary/hashing hot path)
+    // ----------------------------------------------------
+
+    [Benchmark(Description = "String GetHashCode")]
+    public int Hash_String()
+    {
+        return _string1.GetHashCode();
+    }
+
+    [Benchmark(Description = "Simple.GetHashCode()")]
+    public int Hash_Simple()
+    {
+        return _simple1.GetHashCode();
+    }
+
+    [Benchmark(Description = "Smart.GetHashCode()")]
+    public int Hash_Smart()
+    {
+        return _smart1.GetHashCode();
+    }
+
+    // ----------------------------------------------------
+    // 4. SYSTEM.TEXT.JSON (wrapper converter round trip)
+    // ----------------------------------------------------
+
+    [Benchmark(Description = "STJ Serialize SmartUser")]
+    public string Serialize_Smart()
+    {
+        return JsonSerializer.Serialize(_smart1);
+    }
+
+    [Benchmark(Description = "STJ Deserialize SmartUser")]
+    public SmartUser Deserialize_Smart()
+    {
+        return JsonSerializer.Deserialize<SmartUser>("\"johndoe\"")!;
     }
 }

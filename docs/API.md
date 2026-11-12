@@ -1,6 +1,6 @@
 # Primify API
 
-Primify targets .NET 10. The package contains the runtime support library and the incremental source generator, and has
+Primify multi-targets .NET 10 and .NET 11. The package contains the runtime support library and the incremental source generator, and has
 no package dependencies. Serializer adapters for Newtonsoft.Json and LiteDB are generated into the consumer assembly at
 compile time, only when that package is referenced; System.Text.Json ships in the framework and is always wired up.
 
@@ -67,6 +67,8 @@ public partial record class UserName
 
 ## Diagnostics
 
+Each diagnostic carries a `helpLinkUri` pointing at this section, so the IDE's help action lands here.
+
 | ID | Meaning |
 |---|---|
 | PRIT001 | The wrapped type could not be determined. |
@@ -84,6 +86,15 @@ public partial record class UserName
 The generated converter writes the underlying primitive and rebuilds through `From`. System.Text.Json resolves JSON
 `null` before the converter runs, so a reference-type wrapper reads back as `null`. A value-type wrapper has no null
 representation and throws a `JsonException` naming the wrapper; declare the property as `Wrapper?` instead.
+
+The reflection-based serializer (default options) is the zero-configuration path. The System.Text.Json source generator
+cannot see attributes attached by another source generator, so the `[JsonConverter]` on a generated wrapper is inert when
+a `JsonSerializerContext` serializes it. For source-gen and Native AOT applications, register the converters on the
+context: `[JsonSourceGenerationOptions(Converters = [typeof(SystemTextJsonConverter<W, T>), ...])]`. Without it, a wrapper
+serializes as `{}` and deserializes as `default` silently.
+
+`Read`/`Write` use `JsonTypeInfo` overloads, so the adapter is trimming- and AOT-clean (the runtime assembly is marked
+`IsAotCompatible`/`IsTrimmable`). Under AOT, consumers must use a context as described above.
 
 ### Newtonsoft.Json
 
