@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <!-- Analyzers stay on netstandard2.0 so the compiler of any supported consumer SDK can load them.
+             C# 15 syntax is available, but features that need runtime types (unions) are not. -->
         <TargetFramework>netstandard2.0</TargetFramework>
-        <LangVersion>latest</LangVersion>
+        <LangVersion>15.0</LangVersion>
         <IsPackable>false</IsPackable>
         <IsRoslynComponent>true</IsRoslynComponent>
         <RootNamespace>Primify.Generators</RootNamespace>

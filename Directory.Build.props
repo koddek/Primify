@@ -18,7 +18,7 @@
 
         <IsPackable>false</IsPackable> <!-- default off; override per‑project -->
 
-        <LangVersion>latest</LangVersion>
+        <!-- net10.0 defaults to C# 14, net11.0 to C# 15; do not pin a repo-wide LangVersion. The generator project pins its own. -->
         <ImplicitUsings>true</ImplicitUsings>
         <Nullable>enable</Nullable>
         <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -37,7 +37,7 @@
     <ItemGroup>
         <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/"/>
         <None Include="$(MSBuildThisFileDirectory)icon.png" Pack="true" PackagePath="/"/>
-        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.403" PrivateAssets="all"/>
+        <PackageReference Include="Microsoft.SourceLink.GitHub" Version="11.0.100" PrivateAssets="all"/>
     </ItemGroup>
 
     <PropertyGroup Condition="'$(IsRoslynComponent)' == 'true'">

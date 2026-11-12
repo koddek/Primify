@@ -1,0 +1,20 @@
+# Trimmed, tooling-only configuration. No analyzer severity rules live here — those belong in
+# .editorconfig only when the whole team agrees on them.
+root = true
+
+[*]
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,csproj,md}]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json}]
+indent_style = space
+indent_size = 2
+
+# Test fixtures intentionally commit wrapped text at odd indents.
+[tests/**]
+trim_trailing_whitespace = false
