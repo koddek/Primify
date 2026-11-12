@@ -11,3 +11,13 @@ PRIT001 | TypeValidation | Error | Invalid wrapped type
 PRIT002 | TypeValidation | Error | Invalid Normalize signature
 PRIT003 | TypeValidation | Error | Invalid Validate signature
 PRIT004 | TypeValidation | Error | Containing type must be partial
+
+## Release 2.0.0
+
+### New Rules
+
+Rule ID | Category | Severity | Notes
+--------|----------|----------|-------
+PRIT005 | TypeValidation | Error | Unsupported wrapper declaration
+PRIT006 | TypeValidation | Error | Reserved generated member conflict
+PRIT007 | Serialization | Warning | LiteDB is referenced but the wrapped type has no built-in LiteDB bridge

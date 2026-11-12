@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -21,11 +22,23 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
     private const string AttributeMetadataName = "PrimifyAttribute`1";
     private const string AttributeNamespace = "Primify.Attributes";
 
+    private static readonly ConditionalWeakTable<SyntaxTree, string[]> PrimifyAliasCache = new();
+
     private static readonly string[] CommonReservedMembers =
         ["Value", "From", "TryFrom", "op_Implicit", "op_Explicit"];
 
     private static readonly string[] EqualityReservedMembers =
         ["ToString", "Equals", "GetHashCode", "op_Equality", "op_Inequality"];
+
+    // Every non-special type the generator emits is global::-qualified through this format. Special types
+    // (int, string, ...) stay keywords — they cannot be shadowed — and nullability annotations are kept so
+    // a wrapped string? keeps its annotation in generated source.
+    private static readonly SymbolDisplayFormat QualifiedTypeFormat =
+        SymbolDisplayFormat.FullyQualifiedFormat.WithMiscellaneousOptions(
+            SymbolDisplayMiscellaneousOptions.UseSpecialTypes |
+            SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers |
+            SymbolDisplayMiscellaneousOptions.ExpandNullable |
+            SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier);
 
     /// <summary>
     /// Registers the incremental pipeline. Every attributed type declaration is modeled once; the modeled
@@ -38,7 +51,7 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
     {
         var models = context.SyntaxProvider
             .CreateSyntaxProvider(
-                static (node, _) => node is TypeDeclarationSyntax declaration && declaration.AttributeLists.Count > 0,
+                static (node, _) => node is TypeDeclarationSyntax declaration && HasPotentialPrimifyAttribute(declaration),
                 static (syntaxContext, _) => BuildModel(syntaxContext))
             .Where(static model => model is not null)
             .Select(static (model, _) => (PrimifyModel)model!);
@@ -57,6 +70,87 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
         attributeClass.MetadataName == AttributeMetadataName &&
         attributeClass.ContainingNamespace.ToDisplayString() == AttributeNamespace;
 
+    // Cheap syntactic gate that runs before semantic binding. Accepts:
+    //   - attributes spelled [Primify] / [PrimifyAttribute] (qualified or not),
+    //   - any generic attribute — covers [Primify<int>] and unbound-generic aliases like [Q<int>],
+    //   - attributes spelled with an identifier that this file declares as a using-alias (e.g. [P] for
+    //     [Primify<int>]); aliases are collected once per syntax tree and cached.
+    // The semantic IsPrimifyAttribute check in BuildModel stays the authority, so this only ever
+    // narrows work, never changes which types are accepted.
+    private static bool HasPotentialPrimifyAttribute(TypeDeclarationSyntax declaration)
+    {
+        foreach (var attributeList in declaration.AttributeLists)
+        {
+            foreach (var attribute in attributeList.Attributes)
+            {
+                if (attribute.Name is GenericNameSyntax)
+                {
+                    return true;
+                }
+
+                var name = SimpleIdentifier(attribute.Name);
+                if (name is "Primify" or "PrimifyAttribute" || IsPrimifyAlias(name, declaration.SyntaxTree))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsPrimifyAlias(string? name, SyntaxTree tree)
+    {
+        if (name is null)
+        {
+            return false;
+        }
+
+        foreach (var alias in PrimifyAliases(tree))
+        {
+            if (string.Equals(alias, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    // Collects the identifiers of using-aliases in this file whose aliased type could be PrimifyAttribute<T>
+    // or [Primify<T>]'s attribute. Cheap string scan; cached per tree.
+    private static string[] PrimifyAliases(SyntaxTree tree) =>
+        PrimifyAliasCache.GetValue(tree, static syntaxTree =>
+        {
+            var aliases = new List<string>();
+            foreach (var usingDirective in syntaxTree.GetRoot().DescendantNodesAndSelf().OfType<UsingDirectiveSyntax>())
+            {
+                var aliasName = usingDirective.Alias?.Name?.ToString();
+                if (aliasName is not { Length: > 0 } || usingDirective.Name is null)
+                {
+                    continue;
+                }
+
+                var text = usingDirective.Name.ToString();
+                if (text.IndexOf("PrimifyAttribute", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    text.IndexOf("Primify<", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    aliases.Add(aliasName);
+                }
+            }
+
+            return aliases.ToArray();
+        });
+
+    private static string? SimpleIdentifier(NameSyntax name) => name switch
+    {
+        IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
+        GenericNameSyntax generic => generic.Identifier.ValueText,
+        QualifiedNameSyntax qualified => SimpleIdentifier(qualified.Right),
+        AliasQualifiedNameSyntax alias => SimpleIdentifier(alias.Name),
+        _ => null
+    };
+
     private static PrimifyModel? BuildModel(GeneratorSyntaxContext context)
     {
         if (context.Node is not TypeDeclarationSyntax node ||
@@ -73,13 +167,17 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
 
         var wrappedTypeSymbol = attr.AttributeClass?.TypeArguments.FirstOrDefault();
         var wrappedType = wrappedTypeSymbol?.ToDisplayString();
+        var wrappedTypeQualified = wrappedTypeSymbol?.ToDisplayString(QualifiedTypeFormat);
         var wrapsNullableValueType = wrappedTypeSymbol is INamedTypeSymbol nullableSymbol &&
             nullableSymbol.IsValueType &&
             nullableSymbol.ConstructedFrom.SpecialType == SpecialType.System_Nullable_T;
         var underlyingWrappedType = wrapsNullableValueType
-            ? ((INamedTypeSymbol)wrappedTypeSymbol!).TypeArguments[0].ToDisplayString()
-            : wrappedType ?? string.Empty;
+            ? ((INamedTypeSymbol)wrappedTypeSymbol!).TypeArguments[0].ToDisplayString(QualifiedTypeFormat)
+            : wrappedTypeQualified ?? string.Empty;
         var containingTypes = GetContainingTypes(node);
+        var typeName = containingTypes.IsEmpty
+            ? typeSymbol.Name
+            : $"{containingTypes.Join(static type => type.Name)}.{typeSymbol.Name}";
 
         var keyword = node switch
         {
@@ -105,21 +203,52 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
 
         var compilation = context.SemanticModel.Compilation;
 
+        var rejections = new List<Rejection>();
+        if (wrappedType is null)
+        {
+            rejections.Add(new InvalidTypeRejection(typeName));
+        }
+
+        var unsupportedReason = GetUnsupportedDeclarationReason(node, typeSymbol, containingTypes);
+        if (unsupportedReason is { } reason)
+        {
+            rejections.Add(new UnsupportedDeclarationRejection(typeName, reason));
+        }
+
+        var reservedMember = GetReservedMemberConflict(typeSymbol, wrappedTypeSymbol);
+        if (reservedMember is { } member)
+        {
+            rejections.Add(new ReservedMemberConflictRejection(typeName, member));
+        }
+
+        if (invalidNormalize)
+        {
+            rejections.Add(new InvalidNormalizeRejection(typeName, wrappedType ?? string.Empty));
+        }
+
+        if (invalidValidate)
+        {
+            rejections.Add(new InvalidValidateRejection(typeName, wrappedType ?? string.Empty));
+        }
+
+        if (containingTypes.Any(static type => !type.IsPartial))
+        {
+            rejections.Add(new ContainingTypeNotPartialRejection(typeName));
+        }
+
         return new PrimifyModel(
             Namespace: typeSymbol.ContainingNamespace.ToDisplayString(),
             ClassName: typeSymbol.Name,
             Keyword: keyword,
             WrappedType: wrappedType,
+            WrappedTypeQualified: wrappedTypeQualified,
             WrappedTypeIsReferenceType: wrappedTypeSymbol?.IsReferenceType == true,
             IsValueType: typeSymbol.IsValueType,
             IsRecord: node is RecordDeclarationSyntax,
             EqualityStrategy: ResolveEqualityStrategy(wrappedTypeSymbol),
             HasNormalize: hasNormalize,
             HasValidate: hasValidate,
-            InvalidNormalizeSignature: invalidNormalize,
-            InvalidValidateSignature: invalidValidate,
-            UnsupportedDeclarationReason: GetUnsupportedDeclarationReason(node, typeSymbol, containingTypes),
-            ReservedMemberConflict: GetReservedMemberConflict(typeSymbol, wrappedTypeSymbol),
+            Rejections: new EquatableArray<Rejection>([.. rejections]),
             Location: DiagnosticLocation.From(node.Identifier.GetLocation()),
             ContainingTypes: containingTypes,
             LiteDbAvailable: compilation.GetTypeByMetadataName("LiteDB.BsonMapper") is not null,
@@ -135,70 +264,12 @@ public sealed class PrimifyGenerator : IIncrementalGenerator
     {
         var location = model.Location.ToLocation();
 
-        if (model.WrappedType is null)
+        if (!model.Rejections.IsEmpty)
         {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.InvalidType,
-                location,
-                model.ClassName));
-
-            return;
-        }
-
-        if (model.UnsupportedDeclarationReason is { } unsupportedReason)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.UnsupportedTypeDeclaration,
-                location,
-                model.TypeName,
-                unsupportedReason));
-
-            return;
-        }
-
-        if (model.ReservedMemberConflict is { } reservedMember)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.ReservedMemberConflict,
-                location,
-                model.TypeName,
-                reservedMember));
-
-            return;
-        }
-
-        var hasInvalidHook = false;
-        if (model.InvalidNormalizeSignature)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.InvalidNormalizeSignature,
-                location,
-                model.TypeName,
-                model.WrappedType));
-            hasInvalidHook = true;
-        }
-
-        if (model.InvalidValidateSignature)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.InvalidValidateSignature,
-                location,
-                model.TypeName,
-                model.WrappedType));
-            hasInvalidHook = true;
-        }
-
-        if (hasInvalidHook)
-        {
-            return;
-        }
-
-        if (model.HasUnsupportedContainingType)
-        {
-            context.ReportDiagnostic(Diagnostic.Create(
-                Diagnostics.ContainingTypeMustBePartial,
-                location,
-                model.TypeName));
+            foreach (var rejection in model.Rejections)
+            {
+                context.ReportDiagnostic(rejection.Create(location));
+            }
 
             return;
         }

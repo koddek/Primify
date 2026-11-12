@@ -81,13 +81,13 @@ public class GeneratorSnapshotTests
         await AssertNoErrors(diagnostics);
 
         var source = generated ?? string.Empty;
-        await Assert.That(source).Contains("[System.Diagnostics.DebuggerDisplay(\"{Value}\")]");
+        await Assert.That(source).Contains("[global::System.Diagnostics.DebuggerDisplay(\"{Value}\")]");
         await Assert.That(source).Contains("explicit operator Foo(int value)");
         await Assert.That(source).Contains("implicit operator int(Foo value)");
         // This harness compilation references neither LiteDB nor Newtonsoft.Json, so no adapter code may appear.
         await Assert.That(source).DoesNotContain("LiteDB");
         await Assert.That(source).DoesNotContain("Newtonsoft");
-        await Assert.That(source).Contains("[System.Text.Json.Serialization.JsonConverter(typeof(SystemTextJsonConverter<Foo, int>))]");
+        await Assert.That(source).Contains("[global::System.Text.Json.Serialization.JsonConverter(typeof(global::Primify.Converters.SystemTextJsonConverter<Foo, int>))]");
         await Assert.That(source).Contains("public static bool TryFrom(int value, out Foo result)");
         await Assert.That(source).Contains("/// Non-throwing alternative to <see cref=\"From\"/>.");
         await Assert.That(source).DoesNotContain("ToString()");
@@ -111,8 +111,8 @@ public class GeneratorSnapshotTests
 
         var source = generated ?? string.Empty;
         await Assert.That(source).Contains("public override string ToString() => Value?.ToString() ?? string.Empty;");
-        await Assert.That(source).Contains("string.Equals(Value, other.Value, System.StringComparison.Ordinal)");
-        await Assert.That(source).Contains("throw new ArgumentNullException(nameof(value));");
+        await Assert.That(source).Contains("global::System.String.Equals(Value, other.Value, global::System.StringComparison.Ordinal)");
+        await Assert.That(source).Contains("throw new global::System.ArgumentNullException(nameof(value));");
     }
 
     [Test]

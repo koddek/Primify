@@ -7,16 +7,16 @@ namespace Primify.Generator.Tests.Common;
 public class GeneratorEqualityStrategyTests
 {
     [Test]
-    [Arguments("string", "string.Equals(Value, other.Value, System.StringComparison.Ordinal)")]
-    [Arguments("System.String", "string.Equals(Value, other.Value, System.StringComparison.Ordinal)")]
+    [Arguments("string", "global::System.String.Equals(Value, other.Value, global::System.StringComparison.Ordinal)")]
+    [Arguments("System.String", "global::System.String.Equals(Value, other.Value, global::System.StringComparison.Ordinal)")]
     [Arguments("int", "Value == other.Value")]
     [Arguments("System.Guid", "Value == other.Value")]
     [Arguments("System.DateTimeOffset", "Value == other.Value")]
     [Arguments("System.TimeSpan", "Value == other.Value")]
     [Arguments("nint", "Value == other.Value")]
-    [Arguments("double", "System.Collections.Generic.EqualityComparer<double>.Default.Equals(Value, other.Value)")]
-    [Arguments("float", "System.Collections.Generic.EqualityComparer<float>.Default.Equals(Value, other.Value)")]
-    [Arguments("System.Half", "System.Collections.Generic.EqualityComparer<System.Half>.Default.Equals(Value, other.Value)")]
+    [Arguments("double", "global::System.Collections.Generic.EqualityComparer<double>.Default.Equals(Value, other.Value)")]
+    [Arguments("float", "global::System.Collections.Generic.EqualityComparer<float>.Default.Equals(Value, other.Value)")]
+    [Arguments("System.Half", "global::System.Collections.Generic.EqualityComparer<global::System.Half>.Default.Equals(Value, other.Value)")]
     public async Task Strategy_DependsOnSymbol_NotSpelling(string wrappedType, string expectedEquality)
     {
         var (diagnostics, generated) = GeneratorSnapshotTests.Generate($$"""
@@ -52,7 +52,7 @@ public class GeneratorEqualityStrategyTests
         await Assert.That(diagnostics.Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error))
             .IsEmpty();
         await Assert.That(generated).Contains(
-            "System.Collections.Generic.EqualityComparer<Snap.Money>.Default.Equals(Value, other.Value)");
+            "global::System.Collections.Generic.EqualityComparer<global::Snap.Money>.Default.Equals(Value, other.Value)");
     }
 
     [Test]
@@ -70,9 +70,12 @@ public class GeneratorEqualityStrategyTests
             public partial struct UsingShape;
             """);
 
-        // The module initializer spells its attribute out in full, so the namespace import is dead weight
-        // that would surface as CS8019 in every consuming project.
-        await Assert.That(generated).DoesNotContain("using System.Runtime.CompilerServices;");
-        await Assert.That(generated).Contains("using Primify.Converters;");
+        // Everything the file references is global::-qualified, so the file carries no using directives at
+        // all — an unused using would surface as CS8019 in the consuming project. Check for a line that
+        // starts with "using " rather than the substring "using " (doc comments may contain the word).
+        var hasUsingLine = generated is not null &&
+            generated.Split('\n').Any(static line => line.TrimStart(' ').StartsWith("using ", StringComparison.Ordinal));
+
+        await Assert.That(hasUsingLine).IsFalse();
     }
 }

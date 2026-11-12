@@ -28,17 +28,15 @@ internal record PrimifyModel(
     string Namespace,
     string ClassName,
     string Keyword, // class, struct, record class, record struct
-    string? WrappedType, // int, string, Guid, ...; null when the wrapped type could not be resolved
+    string? WrappedType, // int, string, Guid, ...; null when the wrapped type could not be resolved. Kept minimal for diagnostic messages.
+    string? WrappedTypeQualified, // global::-qualified form used in generated source; same nullability as WrappedType.
     bool WrappedTypeIsReferenceType,
     bool IsValueType,
     bool IsRecord,
     EqualityStrategy EqualityStrategy,
     bool HasNormalize,
     bool HasValidate,
-    bool InvalidNormalizeSignature,
-    bool InvalidValidateSignature,
-    string? UnsupportedDeclarationReason,
-    string? ReservedMemberConflict,
+    EquatableArray<Rejection> Rejections,
     DiagnosticLocation Location,
     EquatableArray<ContainingTypeModel> ContainingTypes,
     bool LiteDbAvailable,
@@ -67,16 +65,10 @@ internal record PrimifyModel(
         ? $"{TypeName}.g.cs"
         : $"{Namespace}.{TypeName}.g.cs";
 
-    public bool HasUnsupportedContainingType => ContainingTypes.Any(type => !type.IsPartial);
-
     /// <summary>True when the wrapper itself is generated, i.e. no blocking diagnostic was reported.</summary>
     public bool IsGeneratable =>
         WrappedType is not null &&
-        UnsupportedDeclarationReason is null &&
-        ReservedMemberConflict is null &&
-        !InvalidNormalizeSignature &&
-        !InvalidValidateSignature &&
-        !HasUnsupportedContainingType;
+        Rejections.IsEmpty;
 }
 
 /// <summary>

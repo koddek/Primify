@@ -2,6 +2,7 @@ namespace Primify.Converters;
 
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 
 /// <summary>
 /// A reflection-free JSON converter for Primify wrapper types using System.Text.Json.
@@ -43,7 +44,8 @@ public sealed class SystemTextJsonConverter<TWrapper, TValue> : JsonConverter<TW
                 "Use a nullable wrapper property to represent a missing value.");
         }
 
-        var innerValue = JsonSerializer.Deserialize<TValue>(ref reader, options);
+        var typeInfo = (JsonTypeInfo<TValue>)options.GetTypeInfo(typeof(TValue));
+        var innerValue = JsonSerializer.Deserialize(ref reader, typeInfo);
         if (innerValue is null)
         {
             throw new JsonException(
@@ -61,6 +63,7 @@ public sealed class SystemTextJsonConverter<TWrapper, TValue> : JsonConverter<TW
     /// <param name="options">The serializer options forwarded for the inner value.</param>
     public override void Write(Utf8JsonWriter writer, TWrapper value, JsonSerializerOptions options)
     {
-        JsonSerializer.Serialize(writer, value.Value, options);
+        var typeInfo = (JsonTypeInfo<TValue>)options.GetTypeInfo(typeof(TValue));
+        JsonSerializer.Serialize(writer, value.Value, typeInfo);
     }
 }

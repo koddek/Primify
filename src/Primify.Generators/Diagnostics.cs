@@ -2,13 +2,16 @@ namespace Primify.Generators;
 
 internal static class Diagnostics
 {
+    private const string HelpLink = "https://github.com/koddek/Primify/blob/main/docs/API.md#diagnostics";
+
     public static readonly DiagnosticDescriptor InvalidType = new(
         id: "PRIT001",
         title: "Invalid Primify Type",
         messageFormat: "Could not determine wrapped type for '{0}'",
         category: "TypeValidation",
         defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+        isEnabledByDefault: true,
+        helpLinkUri: HelpLink);
 
     public static readonly DiagnosticDescriptor InvalidNormalizeSignature = new(
         id: "PRIT002",
@@ -16,7 +19,8 @@ internal static class Diagnostics
         messageFormat: "'{0}' must declare 'private static {1} Normalize({1} value)' for normalization to run",
         category: "TypeValidation",
         defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+        isEnabledByDefault: true,
+        helpLinkUri: HelpLink);
 
     public static readonly DiagnosticDescriptor InvalidValidateSignature = new(
         id: "PRIT003",
@@ -24,7 +28,8 @@ internal static class Diagnostics
         messageFormat: "'{0}' must declare 'private static void Validate({1} value)' for validation to run",
         category: "TypeValidation",
         defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+        isEnabledByDefault: true,
+        helpLinkUri: HelpLink);
 
     public static readonly DiagnosticDescriptor ContainingTypeMustBePartial = new(
         id: "PRIT004",
@@ -32,7 +37,8 @@ internal static class Diagnostics
         messageFormat: "Nested Primify type '{0}' requires every containing type to be declared partial",
         category: "TypeValidation",
         defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+        isEnabledByDefault: true,
+        helpLinkUri: HelpLink);
 
     public static readonly DiagnosticDescriptor UnsupportedTypeDeclaration = new(
         id: "PRIT005",
@@ -40,7 +46,8 @@ internal static class Diagnostics
         messageFormat: "Primify cannot generate '{0}': {1}",
         category: "TypeValidation",
         defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+        isEnabledByDefault: true,
+        helpLinkUri: HelpLink);
 
     public static readonly DiagnosticDescriptor ReservedMemberConflict = new(
         id: "PRIT006",
@@ -48,7 +55,8 @@ internal static class Diagnostics
         messageFormat: "Primify wrapper '{0}' already declares reserved member '{1}'",
         category: "TypeValidation",
         defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+        isEnabledByDefault: true,
+        helpLinkUri: HelpLink);
 
     public static readonly DiagnosticDescriptor NoLiteDbBridge = new(
         id: "PRIT007",
@@ -57,5 +65,6 @@ internal static class Diagnostics
             "register it manually with BsonMapper.RegisterType or after LiteDbRegistration.Register",
         category: "Serialization",
         defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true);
+        isEnabledByDefault: true,
+        helpLinkUri: HelpLink);
 }

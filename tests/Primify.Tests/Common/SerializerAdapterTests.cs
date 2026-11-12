@@ -114,7 +114,7 @@ public class SerializerAdapterTests
 
         await AssertNoErrors(diagnostics);
         var all = AllSources(sources);
-        await Assert.That(all).Contains("[Newtonsoft.Json.JsonConverter(typeof(NewtonsoftJsonConverter<Foo, int>))]");
+        await Assert.That(all).Contains("[global::Newtonsoft.Json.JsonConverter(typeof(global::Primify.Converters.NewtonsoftJsonConverter<Foo, int>))]");
         await Assert.That(all).Contains("class NewtonsoftJsonConverter<TWrapper, TValue>");
         // Newtonsoft.Json.Bson is not referenced, so the BSON branches must not be emitted.
         await Assert.That(all).DoesNotContain("BsonDataWriter");
