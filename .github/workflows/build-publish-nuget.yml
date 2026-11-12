@@ -23,29 +23,9 @@ jobs:
         with:
           global-json-file: global.json
 
-      - name: Ensure GitHub Packages token
-        env:
-          GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
-        run: |
-          if [ -z "$GH_PACKAGES_TOKEN" ]; then
-            echo "Missing GH_PACKAGES_TOKEN (PAT with write:packages). Configure it in repo secrets."
-            exit 1
-          fi
-
-      - name: Authenticate with GitHub Packages
-        run: |
-          # --store-password-in-clear-text is required: without it the .NET SDK tries to
-          # encrypt the password, which is unsupported off Windows, and the step fails with
-          # "Password encryption is not supported on .NET Core for this platform". The
-          # password is already a secret injected by Actions, and it only ever lands in the
-          # runner's throwaway NuGet.config.
-          dotnet nuget add source \
-            --username ${{ github.actor }} \
-            --password ${{ secrets.GH_PACKAGES_TOKEN }} \
-            --name github \
-            --store-password-in-clear-text \
-            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
-
+      # Nothing restores from GitHub Packages: every package dependency lives on nuget.org. The private
+      # feed is needed only to publish, so the token is required there and nowhere else. Adding it to
+      # restore was the source of the NU1301 / 403 Forbidden failures (stale GH_PACKAGES_TOKEN).
       - name: Restore solution
         run: dotnet restore Primify.slnx
 
@@ -63,8 +43,25 @@ jobs:
 
       - name: Publish
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
         run: |
+          if [ -z "$GH_PACKAGES_TOKEN" ]; then
+            echo "Missing GH_PACKAGES_TOKEN (PAT with write:packages). Configure it in repo secrets."
+            exit 1
+          fi
+          # --store-password-in-clear-text is required: without it the .NET SDK tries to
+          # encrypt the password, which is unsupported off Windows, and the step fails with
+          # "Password encryption is not supported on .NET Core for this platform". The
+          # password is already a secret injected by Actions, and it only ever lands in the
+          # runner's throwaway NuGet.config.
+          dotnet nuget add source \
+            --username ${{ github.actor }} \
+            --password "$GH_PACKAGES_TOKEN" \
+            --name github \
+            --store-password-in-clear-text \
+            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
           dotnet nuget push "./nupkg/*.nupkg" \
             --source github \
-            --api-key ${{ secrets.GH_PACKAGES_TOKEN }} \
+            --api-key "$GH_PACKAGES_TOKEN" \
             --skip-duplicate
