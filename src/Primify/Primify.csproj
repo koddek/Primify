@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <!-- Multi-targeted: net10.0 (LTS) for consumers still on it, net11.0 for the current SDK. No package
-             dependencies; System.Text.Json is in-box for both. -->
-        <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+        <!-- net11.0-only (from 3.0.0): aligned with the .NET 11 line. No package
+             dependencies; System.Text.Json ships in-box. -->
+        <TargetFramework>net11.0</TargetFramework>
         <IsAotCompatible>true</IsAotCompatible>
         <IsTrimmable>true</IsTrimmable>
         <PackageId>Primify</PackageId>
