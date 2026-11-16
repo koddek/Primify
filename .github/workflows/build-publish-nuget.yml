@@ -4,13 +4,22 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   pull_request:
+    branches:
+      - main
+
+# Building never publishes. Every push and pull request restores and builds the
+# library project. A package is packed and pushed to GitHub Packages only by
+# pushing a tag `v<Version>` that matches the <Version> in src/Primify/Primify.csproj.
+# Nothing here restores from GitHub Packages: every package dependency lives on nuget.org.
 
 jobs:
-  build-and-publish:
+  build:
+    name: Build
     runs-on: ubuntu-latest
     permissions:
-      packages: write
       contents: read
 
     steps:
@@ -23,45 +32,71 @@ jobs:
         with:
           global-json-file: global.json
 
-      # Nothing restores from GitHub Packages: every package dependency lives on nuget.org. The private
-      # feed is needed only to publish, so the token is required there and nowhere else. Adding it to
-      # restore was the source of the NU1301 / 403 Forbidden failures (stale GH_PACKAGES_TOKEN).
-      - name: Restore solution
-        run: dotnet restore Primify.slnx
+      - name: Restore library project
+        run: dotnet restore src/Primify/Primify.csproj
 
       - name: Audit packages for known vulnerabilities
-        run: dotnet list Primify.slnx package --vulnerable --include-transitive
+        run: dotnet list src/Primify/Primify.csproj package --vulnerable --include-transitive
 
-      - name: Build solution
-        run: dotnet build Primify.slnx --configuration Release --no-restore
+      - name: Build library project
+        run: dotnet build src/Primify/Primify.csproj --configuration Release --no-restore -p:GeneratePackageOnBuild=false
 
-      - name: Run tests
-        run: dotnet run --project tests/Primify.Tests/Primify.Tests.csproj --configuration Release --no-build
+  publish:
+    name: Publish
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+      contents: write
 
-      - name: Pack
-        run: dotnet pack src/Primify/Primify.csproj --configuration Release --no-build --output ./nupkg
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-      - name: Publish
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_PACKAGES_TOKEN: ${{ secrets.GH_PACKAGES_TOKEN }}
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Verify the tag matches the package version
+        id: extract_version
         run: |
-          if [ -z "$GH_PACKAGES_TOKEN" ]; then
-            echo "Missing GH_PACKAGES_TOKEN (PAT with write:packages). Configure it in repo secrets."
+          VERSION=$(grep '<Version>' src/Primify/Primify.csproj | sed -n 's/.*<Version>\(.*\)<\/Version>.*/\1/p')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Could not extract <Version> from src/Primify/Primify.csproj"
             exit 1
           fi
-          # --store-password-in-clear-text is required: without it the .NET SDK tries to
-          # encrypt the password, which is unsupported off Windows, and the step fails with
-          # "Password encryption is not supported on .NET Core for this platform". The
-          # password is already a secret injected by Actions, and it only ever lands in the
-          # runner's throwaway NuGet.config.
-          dotnet nuget add source \
-            --username ${{ github.actor }} \
-            --password "$GH_PACKAGES_TOKEN" \
-            --name github \
-            --store-password-in-clear-text \
-            "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          if [ "v${VERSION}" != "${GITHUB_REF#refs/tags/}" ]; then
+            echo "::error::Tag '${GITHUB_REF#refs/tags/}' does not match <Version> '$VERSION' in src/Primify/Primify.csproj. Bump <Version> or fix the tag."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Tag ${GITHUB_REF#refs/tags/} matches <Version> $VERSION."
+
+      - name: Restore library project
+        run: dotnet restore src/Primify/Primify.csproj
+
+      # The package is built by pack directly, so GeneratePackageOnBuild is redundant here.
+      - name: Pack
+        run: dotnet pack src/Primify/Primify.csproj --configuration Release --no-restore --no-build -p:GeneratePackageOnBuild=false -o ./nupkg
+
+      - name: Push to GitHub Packages
+        run: |
           dotnet nuget push "./nupkg/*.nupkg" \
-            --source github \
-            --api-key "$GH_PACKAGES_TOKEN" \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --api-key "${{ secrets.GITHUB_TOKEN }}" \
             --skip-duplicate
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.extract_version.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists."
+          elif ! gh release create "v$VERSION" --title "Primify $VERSION" --generate-notes; then
+            echo "::error::gh release create failed. Check that GITHUB_TOKEN has 'contents: write'."
+            exit 1
+          fi
